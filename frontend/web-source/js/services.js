@@ -319,7 +319,8 @@ export async function startLogStream(renderHeaderCallback, logLineCallback) {
             const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split('\n');
             lines.forEach(line => {
-                if (logLineCallback) logLineCallback(line.trim());
+                const trimmed = line.trim();
+                if (trimmed && logLineCallback) logLineCallback(trimmed);
             });
         }
     } catch (error) {

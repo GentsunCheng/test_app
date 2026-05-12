@@ -375,7 +375,8 @@ class TestScript:
                         if line.strip():
                             line_str = line_str + line.strip() + '\n'
                 yield line_str.encode('utf-8')
-            if not stream_contents:
+            has_content = any(any(lines) for lines in stream_contents)
+            if not has_content:
                 yield ""
             time.sleep(0.1)
         yield "################################################\n"

@@ -529,6 +529,8 @@ export function renderLogView() {
             if (!logOutput) return;
             if (logOutput.textContent === 'Connecting...') logOutput.innerHTML = '';
             
+            if (!line) return;
+            
             const isAtBottom = logOutput.scrollHeight - logOutput.scrollTop <= logOutput.clientHeight + 25;
             const entry = document.createElement('div');
             entry.className = 'log-entry';
