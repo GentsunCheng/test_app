@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coex Automation System</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="manifest" href="manifest.json">
+</head>
+<body>
+    <div class="container">
+        <aside class="toolbar">
+            <div class="unit-search-container">
+                <label for="unit_search_input"></label><input type="text" id="unit_search_input" class="no-select" placeholder="Search units...">
+                <div class="search-options">
+                    <button id="btn_unit_regex" class="no-select" title="Regular Expression">.*</button>
+                    <button id="btn_unit_case" class="no-select" title="Match Case">Aa</button>
+                </div>
+            </div>
+            <div id="unit_list" class="unit-list">
+                <!-- Units will be injected here -->
+            </div>
+            <div id="control_button_bar" class="control-button-bar">
+                <button id="btn_test" class="no-select">Test</button>
+                <button id="btn_log" class="no-select">Log</button>
+                <button id="btn_setting" class="no-select">Setting</button>
+            </div>
+            <div class="host-switcher-bar">
+                <button id="btn_host" class="btn-host-switch no-select">
+                    <span id="current_host_name">Loading</span>
+                </button>
+            </div>
+        </aside>
+        <main class="main-view">
+            <div id="main_content">
+                <h1>StressRack Test</h1>
+                <p>Select a unit to see details or logs.</p>
+            </div>
+            <div id="toast_container" class="toast-container"></div>
+        </main>
+    </div>
+
+    <!-- Modal for adding script -->
+    <div id="modal_overlay" class="modal-overlay">
+        <div class="modal">
+            <h2>Add New Script(s)</h2>
+            <div class="script-entry-header">
+                <span>Script Name</span>
+                <span>Script Path</span>
+                <span class="btn-remove-col"></span>
+            </div>
+            <div id="script_entry_list" class="script-entry-list">
+                <!-- Dynamic script entries -->
+            </div>
+            <div class="modal-actions">
+                <button id="btn_add_entry">+ Add Entry</button>
+                <div style="flex:1"></div>
+                <button id="btn_modal_cancel">Cancel</button>
+                <button id="btn_modal_add" class="btn-add-primary">Add Scripts</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for selecting methods -->
+    <div id="method_modal_overlay" class="modal-overlay">
+        <div class="modal">
+            <h2 id="method_modal_title">Select Method</h2>
+            <div class="method-search-container">
+                <label for="method_search_input"></label><input type="text" id="method_search_input" class="no-select" placeholder="Search methods...">
+                <div class="search-options">
+                    <button id="btn_search_regex" class="no-select" title="Regular Expression">.*</button>
+                    <button id="btn_search_case" class="no-select" title="Match Case">Aa</button>
+                </div>
+            </div>
+            <div id="method_list" class="method-list">
+                <!-- Methods will be injected here -->
+            </div>
+            <div class="modal-actions">
+                <button id="btn_method_cancel">Cancel</button>
+                <button id="btn_method_confirm" class="btn-add-primary" disabled>Run Test</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for host management -->
+    <div id="host_modal_overlay" class="modal-overlay">
+        <div class="modal">
+            <h2>Manage Hosts</h2>
+            <div id="host_list" class="host-list">
+                <!-- Hosts will be injected here -->
+            </div>
+            <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--border-color);">
+            <h3>Add New Host</h3>
+            <div class="form-group" style="margin-top: 15px;">
+                <label for="new_host_name">Name:</label>
+                <input type="text" id="new_host_name" placeholder="e.g. Server 1">
+            </div>
+            <div class="form-group">
+                <label for="new_host_url">URL:</label>
+                <input type="text" id="new_host_url" placeholder="http://127.0.0.1:8196">
+            </div>
+            <div class="modal-actions">
+                <button id="btn_host_cancel">Close</button>
+                <button id="btn_host_add" class="btn-add-primary">Add Host</button>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="js/main.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.register('/service-worker.js').then(registration => {
+            registration.onupdatefound = () => {
+              const installingWorker = registration.installing;
+              if (installingWorker) {
+                installingWorker.onstatechange = () => {
+                  if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('New version!');
+                    if (confirm('New version, refresh?')) {
+                      window.location.reload();
+                    }
+                  }
+                };
+              }
+            };
+          }).catch(error => {
+            console.error('Service Worker register failed:', error);
+          });
+        }
+    </script>
+</body>
+</html>

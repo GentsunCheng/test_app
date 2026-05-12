@@ -1,0 +1,301 @@
+openapi: 3.0.0
+info:
+  title: Test Automation API
+  description: API for managing test scripts and ECID information
+  version: 1.0.0
+servers:
+  - url: http://localhost:8196
+    description: Stress Rack server
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Secret-Key
+    IpWhitelist:
+      type: http
+      scheme: bearer
+      bearerFormat: ip
+  responses:
+    Unauthorized:
+      description: Invalid or missing secret key
+      content:
+        application/json:
+          example:
+            error: "Invalid or missing secret key"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          example:
+            status: "error"
+            message: "Resource not found"
+
+security:
+  - ApiKeyAuth: []
+  - IpWhitelist: []
+
+paths:
+  /api/ecids:
+    get:
+      summary: 获取 ECID 列表
+      description: 获取所有 ECID
+      responses:
+        200:
+          description: 成功
+          content:
+            application/json:
+              example:
+                ["0010441438002936", "0010441438002675"]
+
+  /api/testing_ecids:
+    get:
+      summary: 获取测试用 ECID 列表
+      description: 获取测试 ECID
+      responses:
+        200:
+          description: 成功
+          content:
+            application/json:
+              example:
+                ["0010441438002675"]
+
+  /api/detail_info:
+    post:
+      summary: 获取 ECID 详细信息
+      description: 根据 ECID 获取设备的详细信息
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ecids:
+                  type: array
+                  items:
+                    type: string
+              example:
+                ecids: ["0010441438002936"]
+      responses:
+        200:
+          description: 成功获取 ECID 详细信息
+          content:
+            application/json:
+              example:
+                0010441438002936:
+                  battery: "100"
+                  cg_vendor: "SDC"
+                  temperature: "25.000000"
+                  check_timestamp: 1776196934
+                  config: "3PDFC5BW"
+                  serial_number: "F2029KV7R1"
+                  sw_vers: "24A62611c"
+                  unit_number: "025178"
+
+
+  /api/logs:
+    post:
+      summary: 获取测试日志流
+      description: 流式获取日志信息（Server-Sent Events）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ecids:
+                  type: array
+                  items:
+                    type: string
+              example:
+                ecids: ["0010441438002936"]
+      responses:
+        200:
+          description: 日志流
+          content:
+            text/event-stream:
+              example: |
+                RUNNING TEST ['reference']
+                VALID TEST. CONTINUING
+                INFO: project_version sha1 = 3bedb055cca8df6a2cf7e53a85c70a13afdda38f
+                INFO: project: XXX sha: 3bedb055cca8df6a2cf7e53a85c70a13afdda38f not in valid_sha1_map. Update sha1_map
+                INFO: project_version sha1 = 1ee687bc0b0198b3d2a43869990eaac403fce0a5
+                INFO: project_version: I3
+                ...
+
+  /api/script_info:
+    get:
+      summary: 获取脚本信息
+      description: 获取所有测试脚本的基本信息
+      responses:
+        200:
+          description: 成功
+          content:
+            application/json:
+              example:
+                DOE343:
+                  path: "/Users/Mac/Desktop/DOE/DOE343_FactoryCoexXXX_V319_S"
+                  status: false
+                common:
+                  path: "/Users/Mac/Desktop/Al_EVT_Factory/FactoryCoexXXX_V319_fix_essex"
+                  status: true
+
+
+  /api/script_methods:
+    post:
+      summary: 获取脚本的方法列表
+      description: 根据脚本名获取该脚本中定义的所有方法名称
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                script_name:
+                  type: string
+                  description: 脚本名称（不包含路径）
+                script_path:
+                  type: string
+                  description: 脚本路径（可选）
+              required:
+                - script_name
+            example:
+              script_name: "common"
+      responses:
+        200:
+          description: 成功返回脚本的方法列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  methods:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: string
+                    description: 脚本名 => 方法列表的映射
+              example:
+                status: "success"
+                methods:
+                  common:
+                    - "a173aod"
+                    - "a173camera"
+                    - "a173peridot"
+                    - "a173sensors"
+                    - "a173ttw"
+                    - "aod"
+                    - "b390aod"
+                    - "b390camera"
+                    - ...
+
+  /api/add_test_script:
+    post:
+      summary: 添加测试脚本
+      description: 添加新的测试脚本及其路径
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                script_name:
+                  type: string
+                script_path:
+                  type: string
+              example:
+                script_name: "new_script"
+                script_path: "/path/to/script.py"
+      responses:
+        200:
+          description: 成功
+          content:
+            application/json:
+              example:
+                status: "success"
+                added script: "/path/to/script.py"
+
+  /api/scan_test_script:
+    get:
+      summary: 扫描主机的测试脚本
+      description: 扫描主机的测试脚本
+      responses:
+        200:
+          description: 成功
+          content:
+            application/json:
+              example:
+                DOE343_FactoryCoexXXX_V319_S:
+                  - "/Users/Mac/Desktop/DOE/DOE343_FactoryCoexXXX_V319_S"
+                DOE445_FactoryCoexXXX_V405_C:
+                  - "/Users/Mac/Desktop/DOE/DOE445_FactoryCoexXXX_V405_C"
+                  - "/Users/Mac/Desktop/EVT_Factory/DOE445_FactoryCoexXXX_V405_C"
+
+
+  /api/remove_test_script:
+    post:
+      summary: 移除测试脚本
+      description: 根据脚本名或路径移除测试脚本
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                script_name:
+                  type: string
+                script_path:
+                  type: string
+              example:
+                script_name: "old_script"
+      responses:
+        200:
+          description: 成功
+          content:
+            application/json:
+              example:
+                status: "success"
+                removed script: "old_script"
+
+  /api/run_test_script:
+    post:
+      summary: 运行测试脚本
+      description: 运行指定的测试脚本
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                test_method:
+                  type: string
+                script_name:
+                  type: string
+                units:
+                  type: array
+                  items:
+                    type: string
+              example:
+                test_method: "run_test"
+                script_name: "test_script"
+                units: ["ECID1", "ECID2"]
+      responses:
+        200:
+          description: 成功
+          content:
+            application/json:
+              example:
+                status: "success"
+                test_method: "run_test"
+                units: ["0010441438002936"]

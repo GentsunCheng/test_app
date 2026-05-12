@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# 查找并终止占用 8196 端口的进程
+PID=$(lsof -t -i:8196)
+if [ -n "$PID" ]; then
+  kill -9 "$PID"
+fi
+
+screen -S StressRack -d -m python3 ~/test_app/app.py -L -Logfile ~/test_app/log/app.log
+
+
