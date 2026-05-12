@@ -28,7 +28,8 @@ export const elements = {
     btnHostAdd: document.getElementById('btn_host_add'),
     btnModalCancel: document.getElementById('btn_modal_cancel'),
     btnMethodCancel: document.getElementById('btn_method_cancel'),
-    btnModalAdd: document.getElementById('btn_modal_add')
+    btnModalAdd: document.getElementById('btn_modal_add'),
+    btnScanScript: document.getElementById('btn_scan_script')
 };
 
 export function showToast(message, type) {
@@ -148,6 +149,36 @@ export function validateScriptEntry(entry) {
     }
 
     return true;
+}
+
+export function showConfirmDialog(message, title = 'Confirm') {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById('confirm_modal_overlay');
+        const titleEl = document.getElementById('confirm_modal_title');
+        const messageEl = document.getElementById('confirm_modal_message');
+        const btnOk = document.getElementById('btn_confirm_ok');
+        const btnCancel = document.getElementById('btn_confirm_cancel');
+
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+
+        const cleanup = () => {
+            overlay.style.display = 'none';
+            btnOk.onclick = null;
+            btnCancel.onclick = null;
+        };
+
+        btnOk.onclick = () => {
+            cleanup();
+            resolve(true);
+        };
+        btnCancel.onclick = () => {
+            cleanup();
+            resolve(false);
+        };
+
+        overlay.style.display = 'flex';
+    });
 }
 
 export function closeMethodModal() {

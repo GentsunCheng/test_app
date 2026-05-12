@@ -1,6 +1,6 @@
 import { state } from './store.js';
-import { elements, showToast, stopLogs, openModal, closeModal, closeMethodModal, clearLogs } from './utils.js';
-import { fetchScriptInfo, deleteScript, fetchMethods, startLogStream } from './services.js';
+import { elements, showToast, stopLogs, openModal, closeModal, closeMethodModal, clearLogs, showConfirmDialog } from './utils.js';
+import { fetchScriptInfo, deleteScript, cleanDisabledScripts, fetchMethods, startLogStream } from './services.js';
 
 export function updateHostDisplay() {
     elements.currentHostNameSpan.textContent = state.currentHost.name;
@@ -221,7 +221,10 @@ export function renderSettingsView() {
         elements.mainContent.innerHTML = `
             <div class="settings-header">
                 <h1>Script Settings</h1>
-                <button class="btn-add-primary" id="btn_open_modal">+ Add Script</button>
+                <div class="settings-header-actions">
+                    <button class="btn-clean-disabled" id="btn_clean_disabled">Clean</button>
+                    <button class="btn-add-primary" id="btn_open_modal">+ Add Script</button>
+                </div>
             </div>
             <table class="script-table">
                 <thead>
@@ -236,6 +239,17 @@ export function renderSettingsView() {
             </table>
         `;
         document.getElementById('btn_open_modal').onclick = openModal;
+        document.getElementById('btn_clean_disabled').onclick = async () => {
+            const disabledCount = Object.values(state.scriptInfo).filter(info => info.status === false).length;
+            if (disabledCount === 0) {
+                showToast('No disabled scripts to clean', 'info');
+                return;
+            }
+            if (!await showConfirmDialog(`Are you sure you want to remove ${disabledCount} disabled script(s)?`, 'Clean')) return;
+            const successCount = await cleanDisabledScripts();
+            await fetchScriptInfo(renderSettingsView);
+            showToast(`Removed ${successCount} disabled script(s)`, 'success');
+        };
         table = elements.mainContent.querySelector('.script-table');
     }
 

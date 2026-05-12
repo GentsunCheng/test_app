@@ -1,6 +1,6 @@
 import { state, saveHosts, updateAPI } from './store.js';
 import { elements, showToast, stopLogs, closeMethodModal, closeModal, addScriptEntry, validateScriptEntry } from './utils.js';
-import { checkHostAvailability, fetchUnits, fetchScriptInfo, addScript, runTest } from './services.js';
+import { checkHostAvailability, fetchUnits, fetchScriptInfo, addScript, runTest, scanTestScript } from './services.js';
 import { 
     renderHostList, 
     renderUnits, 
@@ -213,6 +213,27 @@ export function initEventListeners() {
     };
 
     elements.btnAddEntry.onclick = () => addScriptEntry();
+
+    elements.btnScanScript.onclick = async () => {
+        const btn = elements.btnScanScript;
+        btn.disabled = true;
+        btn.textContent = 'Scanning...';
+        try {
+            const data = await scanTestScript();
+            elements.scriptEntryList.innerHTML = '';
+            for (const [name, paths] of Object.entries(data)) {
+                for (const path of paths) {
+                    addScriptEntry(name, path);
+                }
+            }
+            showToast(`Scanned ${Object.keys(data).length} script(s)`, 'success');
+        } catch (error) {
+            showToast('Failed to scan scripts: ' + error.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Scan';
+        }
+    };
 
     elements.modalOverlay.ondragover = (e) => { e.preventDefault(); };
     elements.modalOverlay.ondrop = (e) => {

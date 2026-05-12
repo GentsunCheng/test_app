@@ -135,6 +135,17 @@ export async function fetchDetails(ecids, requestSeq = state.unitsRequestSeq) {
     }
 }
 
+export async function scanTestScript() {
+    try {
+        const response = await fetch(`${state.API_BASE}/api/scan_test_script`);
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error scanning test scripts:', error);
+        throw error;
+    }
+}
+
 export async function fetchScriptInfo(callback) {
     try {
         const response = await fetch(`${state.API_BASE}/api/script_info`);
@@ -180,6 +191,35 @@ export async function deleteScript(name, callback) {
     } catch (error) {
         showToast('Error removing script', 'error');
     }
+}
+
+export async function cleanDisabledScripts() {
+    const disabledNames = Object.entries(state.scriptInfo)
+        .filter(([, info]) => info.status === false)
+        .map(([name]) => name);
+
+    if (disabledNames.length === 0) {
+        showToast('No disabled scripts to clean', 'info');
+        return 0;
+    }
+
+    let successCount = 0;
+    for (const name of disabledNames) {
+        try {
+            const response = await fetch(`${state.API_BASE}/api/remove_test_script`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ script_name: name })
+            });
+            const result = await response.json();
+            if (result.status === 'success') {
+                successCount++;
+            }
+        } catch (error) {
+            console.error(`Error removing disabled script "${name}":`, error);
+        }
+    }
+    return successCount;
 }
 
 export async function runTest(scriptName, method, callback) {
