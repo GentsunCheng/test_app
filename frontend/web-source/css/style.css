@@ -6,6 +6,7 @@
     --border-color: #e9ecef;
     --text-main: #1d1d1f;
     --text-secondary: #86868b;
+    --info-color: #909090;
     --success-color: #34c759;
     --error-color: #ff3b30;
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -557,6 +558,7 @@ body, html {
     animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1), toastOut 0.3s 2.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+.toast.info { background-color: var(--info-color); }
 .toast.success { background-color: var(--success-color); }
 .toast.error { background-color: var(--error-color); }
 

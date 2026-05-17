@@ -6,6 +6,4 @@ if [ -n "$PID" ]; then
   kill -9 "$PID"
 fi
 
-screen -S StressRack -d -m python3 ~/test_app/app.py -L -Logfile ~/test_app/log/app.log
-
-
+nohup python3 ~/test_app/app.py > ~/test_app/log/app_$(date +%Y%m%d).log 2>&1 &

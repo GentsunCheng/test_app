@@ -1,5 +1,4 @@
 import io
-import re
 import sys
 import time
 import json
@@ -8,6 +7,7 @@ import shutil
 import signal
 import logging
 import datetime
+import zipfile
 import openpyxl
 import openpyxl.utils
 import openpyxl.styles
@@ -17,7 +17,7 @@ from art import text2art
 from pathlib import Path
 from collections import deque
 from itertools import zip_longest
-from typing import Union, Tuple, List, Dict, Any
+from typing import Tuple, List, Dict, Any
 
 __IS_ALIVE__ = True
 
@@ -53,17 +53,17 @@ class BlockingQueue:
 
 
 __INFO_EXCEL_PATH__ = Path().home().joinpath("Desktop/FactoryData/.script_test_info.xlsx")
-__NECESSARY_FILE__ = ["common_files", "project_files", "test_flow.ini", "config.json", "host_ssh_script.py"]
+__NECESSARY_FILE__ = ("common_files", "project_files", "test_flow.ini", "config.json", "host_ssh_script.py")
 info_queue = BlockingQueue(maxsize=64)
 
 
 def scan_local_script() -> Dict:
     script_path_dict = {}
     desktop = Path().home().joinpath("Desktop")
-    patterns = [
+    patterns = (
         '*_*_Factory',
         'DOE'
-    ]
+    )
     found_scripts = []
     for pattern in patterns:
         for dir_path in desktop.glob(pattern):
@@ -105,6 +105,40 @@ def log_message(base_path: Path, test_method: str, message: str):
     logger.addHandler(file_handler)
     logger.info(message)
 
+    def archive_and_cleanup_old_logs():
+        logs_dir = base_path.joinpath("logs")
+        archive_dir = base_path.joinpath("logs", "archive")
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        three_days_ago = datetime.datetime.now() - datetime.timedelta(days=3)
+        log_by_date = {}
+        for log_file in logs_dir.glob("*.log"):
+            if log_file.name == "archive":
+                continue
+            file_mtime = datetime.datetime.fromtimestamp(log_file.stat().st_mtime)
+            if file_mtime < three_days_ago:
+                date_str = file_mtime.strftime("%Y-%m-%d")
+                if date_str not in log_by_date:
+                    log_by_date[date_str] = []
+                log_by_date[date_str].append(log_file)
+        for date_str, files in log_by_date.items():
+            zip_filename = f"{date_str}.zip"
+            zip_path = archive_dir.joinpath(zip_filename)
+            with zipfile.ZipFile(zip_path, "w") as zipf:
+                for file in files:
+                    zipf.write(file, arcname=file.name)
+            for file in files:
+                file.unlink(missing_ok=True)
+        three_months_ago = datetime.datetime.now() - datetime.timedelta(days=90)
+        for log_file in logs_dir.glob("*.log"):
+            file_mtime = datetime.datetime.fromtimestamp(log_file.stat().st_mtime)
+            if file_mtime < three_months_ago:
+                log_file.unlink(missing_ok=True)
+        for archive_file in archive_dir.glob("*.zip"):
+            file_mtime = datetime.datetime.fromtimestamp(archive_file.stat().st_mtime)
+            if file_mtime < three_months_ago:
+                archive_file.unlink(missing_ok=True)
+    archive_and_cleanup_old_logs()
+
 
 def save_info_to_excel():
     if __INFO_EXCEL_PATH__.exists():
@@ -114,8 +148,8 @@ def save_info_to_excel():
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = 'sync_info'
-        title = ['serial_number', 'test_name', 'unit_number', 'config', 'bundle', 'script_path', 'battery',
-                 'sync_time']
+        title = ('serial_number', 'test_name', 'unit_number', 'config', 'bundle', 'script_path', 'battery',
+                 'sync_time')
         ws.append(title)
         header_font = openpyxl.styles.Font(name='Calibri', size=16, bold=True)
         header_fill = openpyxl.styles.PatternFill(start_color='9BC2E6', end_color='9BC2E6', fill_type='solid')
@@ -162,7 +196,7 @@ def save_info_to_excel():
 
 
 class TestScript:
-    def __init__(self, base_path):
+    def __init__(self, base_path: Path):
         self.__base_path__ = base_path
         self.__script_path__ = {}
         self.__testing_dict__ = {}
@@ -369,7 +403,7 @@ class TestScript:
                 buffer_positions[i] = len(content)
                 stream_contents.append(new_content.splitlines())
             for lines in zip_longest(*stream_contents):
-                line_str = ""
+                line_str = "\n"
                 for line in lines:
                     if line:
                         if line.strip():
@@ -510,7 +544,7 @@ class TestScript:
                         isinstance(log_stream, io.BytesIO) or isinstance(log_stream, io.StringIO)]):
                     if not thread.is_alive():
                         if log_level == "info":
-                            log_str = log_stream.read().decode('utf-8', errors='ignore')
+                            log_str = log_stream.getvalue().decode('utf-8', errors='ignore')
                             log_message(self.__base_path__, test_method, log_str)
                         log_stream.close()
                         __removable_ecids__.append(ecid)

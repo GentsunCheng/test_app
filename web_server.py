@@ -61,6 +61,11 @@ class Management:
                 abort(403)
             return None
 
+        @self.app.route('/api/preload', methods=['GET'])
+        def preload():
+            self.units_detector.get_detail_info(self.test_scripts.get_testing_ecids(), None)
+            return jsonify({"status": "success"}), 200
+
         @self.app.route('/api/ecids', methods=['GET'])
         def get_units():
             return jsonify(self.units_detector.get_ecids()), 200
@@ -170,6 +175,34 @@ class Management:
                 if not run_result:
                     return jsonify({'status': 'error', 'message': msg}), 400
             return jsonify({'status': 'success', 'test_method': test_method, 'units': units}), 200
+
+        @self.app.route('/api/drain_battery', methods=['POST'])
+        def drain_battery():
+            json_data = request.get_json()
+            if not json_data:
+                return jsonify({'status': 'error', 'message': 'No data provided'}), 400
+            ecids = json_data.get('ecids')
+            target_power = json_data.get('target_power')
+            if not ecids or not target_power:
+                return jsonify({'status': 'error', 'message': 'No data provided'}), 400
+            drain_result, msg = self.units_detector.drain_battery(ecids, target_power)
+            if not drain_result:
+                return jsonify({'status': 'error', 'message': msg}), 400
+            return jsonify({'status': 'success', 'drain_result': drain_result}), 200
+
+        @self.app.route('/api/send_ssh_cmd', methods=['POST'])
+        def send_ssh_cmd():
+            json_data = request.get_json()
+            if not json_data:
+                return jsonify({'status': 'error', 'message': 'No data provided'}), 400
+            ecids = json_data.get('ecids')
+            cmd = json_data.get('cmd')
+            if not ecids or not cmd:
+                return jsonify({'status': 'error', 'message': 'No data provided'}), 400
+            cmd_result, msg = self.units_detector.cmd_tools(ecids, cmd)
+            if not cmd_result:
+                return jsonify({'status': 'error', 'message': msg}), 400
+            return jsonify({'status': 'success', 'cmd': cmd}), 200
 
         @self.app.route('/', methods=['GET'])
         def index():

@@ -37,6 +37,18 @@ security:
   - IpWhitelist: []
 
 paths:
+  /api/preload:
+    get:
+      summary: 预请求信息
+      description: 预请求信息，加快前端响应
+      responses:
+        200:
+          description: 成功
+          content:
+            application/json:
+              example:
+                status: "success"
+
   /api/ecids:
     get:
       summary: 获取 ECID 列表
@@ -299,3 +311,57 @@ paths:
                 status: "success"
                 test_method: "run_test"
                 units: ["0010441438002936"]
+
+  /api/drain_battery:
+    post:
+      summary: 执行机台放电程序
+      description: 执行机台放电程序
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ecids:
+                  type: array
+                target_power:
+                  type: integer
+              example:
+                ecids: ["ECID1", "ECID2"]
+                target_power: 5
+      responses:
+        200:
+          description: 成功
+          content:
+            application/json:
+              example:
+                status: "success"
+                drain_result: "Start draining battery"
+
+  /api/send_ssh_cmd:
+    post:
+      summary: 发送允许的ssh指令
+      description: 发送允许的ssh指令
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ecids:
+                  type: array
+                cmd:
+                  type: string
+              example:
+                ecids: [ "ECID1", "ECID2" ]
+                target_power: "reboot"
+      responses:
+        200:
+          description: 成功
+          content:
+            application/json:
+              example:
+                status: "success"
+                drain_result: "Success send reboot"

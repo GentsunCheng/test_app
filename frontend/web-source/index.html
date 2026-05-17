@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
+    <link rel="preload" href="api/preload" as="fetch">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Coex Automation System</title>
@@ -131,11 +132,8 @@
               if (installingWorker) {
                 installingWorker.onstatechange = () => {
                   if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    console.log('New version!');
-                    if (confirm('New version, refresh?')) {
                       window.location.reload();
                     }
-                  }
                 };
               }
             };
@@ -143,6 +141,26 @@
             console.error('Service Worker register failed:', error);
           });
         }
+    </script>
+    <script>
+        document.addEventListener('contextmenu', function(event) {
+            event.preventDefault();
+        });
+    </script>
+    <script>
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'F12') {
+                e.preventDefault();
+            }
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
+                if (e.key === 'I' || e.key === 'J' || e.key === 'C') {
+                    e.preventDefault();
+                }
+            }
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
+                e.preventDefault();
+            }
+        });
     </script>
 </body>
 </html>

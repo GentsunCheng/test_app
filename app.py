@@ -1,21 +1,59 @@
 import sys
+import zipfile
 from pathlib import Path
 import web_server
 
 
+__VERSION__ = "2605a"
+__RESOURCE_VERSION__ = "2605v1"
+
+
+def smart_extract(zip_path: Path, base_output_dir: Path) -> None:
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        files = [
+            f.filename for f in zip_ref.infolist()
+            if not f.is_dir() and not f.filename.startswith("__MACOSX") and not f.filename.endswith(".DS_Store")
+        ]
+        if all(not f.startswith("/") and "/" not in f for f in files):
+            output_dir = base_output_dir / zip_path.stem
+            output_dir.mkdir(parents=True, exist_ok=True)
+            for file in files:
+                zip_ref.extract(file, output_dir)
+        else:
+            for file in files:
+                zip_ref.extract(file, base_output_dir)
+
+
+def extract_resources() -> None:
+    resource_path = Path(__file__).resolve().parent / "resources"
+    resource_file_list = list(resource_path.glob("**/*.zip"))
+    for resource_file in resource_file_list:
+        smart_extract(resource_file, base_path)
+    with open(base_path / ".resources_version", "w") as f:
+        f.write(__RESOURCE_VERSION__)
+
+
 base_path = Path().home().joinpath(".stress_rack_test")
 if not base_path.exists():
+    print("Initializing stress rack resources")
     base_path.mkdir(parents=True)
+    extract_resources()
 if not base_path.joinpath("logs").exists():
     base_path.joinpath("logs").mkdir()
 
 if not base_path.joinpath("config").exists():
     base_path.joinpath("config").mkdir()
 
+with open(base_path / ".resources_version", "r") as f:
+    resources_version = f.read()
+    if resources_version != __RESOURCE_VERSION__:
+        print("Updating stress rack resources")
+        extract_resources()
+
 
 if __name__ == '__main__':
     __management__ = web_server.Management(
-        units_detector=web_server.backend.units_core.UnitServer(),
+        units_detector=web_server.backend.units_core.UnitServer(base_path=base_path),
         test_scripts=web_server.backend.run_scripts.TestScript(base_path=base_path)
     )
     app = __management__.app
