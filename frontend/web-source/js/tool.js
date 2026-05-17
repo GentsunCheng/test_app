@@ -16,10 +16,16 @@ const toolState = {
 
 const AVAILABLE_COMMANDS = ['halt', 'reboot', 'os_app', 'diags', 'iboot', 'kill_colortest', 'renew_units', 'drain'];
 
+export function refreshToolResults() {
+    const toolView = document.getElementById('tool_view');
+    if (toolView) toolView.style.removeProperty('display');
+    renderLoopResults();
+}
+
 export function renderToolView() {
     const toolView = document.getElementById('tool_view');
     if (!toolView) return;
-    toolView.style.display = 'block';
+    toolView.style.removeProperty('display');
 
     const mainContent = document.getElementById('main_content');
     if (mainContent) {
@@ -236,21 +242,40 @@ function renderLoopList() {
             renderLoopResults();
         };
 
+        let dropHandled = false;
+
         item.addEventListener('dragstart', (e) => {
+            dropHandled = false;
             item.classList.add('dragging');
             e.dataTransfer.setData('text/loop-index', index);
+            e.dataTransfer.effectAllowed = 'move';
         });
 
         item.addEventListener('dragend', () => {
             item.classList.remove('dragging');
+            if (!dropHandled) {
+                item.remove();
+                toolState.loopCommands.splice(index, 1);
+                if (toolState.loopRunning) {
+                    stopLoop();
+                    toolState.ecidCmdProgress = {};
+                    toolState.loopResults = {};
+                    showToast('Loop stopped due to command list change', 'info');
+                }
+                toolState._lastCommandsSnapshot = '';
+                toolState._lastResultsSnapshot = '';
+                renderLoopResults();
+            }
         });
 
         item.addEventListener('dragover', (e) => {
             e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
         });
 
         item.addEventListener('drop', (e) => {
             e.preventDefault();
+            dropHandled = true;
             const fromIndex = parseInt(e.dataTransfer.getData('text/loop-index'));
             if (isNaN(fromIndex)) return;
             if (toolState.loopRunning) {

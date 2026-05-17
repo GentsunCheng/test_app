@@ -204,6 +204,10 @@ class Management:
                 return jsonify({'status': 'error', 'message': msg}), 400
             return jsonify({'status': 'success', 'cmd': cmd}), 200
 
+        @self.app.route('/api/get_cmd_list', methods=['GET'])
+        def get_cmd_list():
+            return jsonify(backend.units_core.get_tool_list()), 200
+
         @self.app.route('/', methods=['GET'])
         def index():
             return self.app.send_static_file('index.html')

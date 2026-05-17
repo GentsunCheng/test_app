@@ -16,7 +16,7 @@ from multiprocessing.shared_memory import SharedMemory
 import pickle
 import tempfile
 import traceback
-from typing import Union, Callable, Tuple, Any, Literal
+from typing import Union, Callable, Tuple, Any, Literal, TypeAlias, get_args
 from types import MappingProxyType
 
 __CG_VENDOR_MAP__ = MappingProxyType({
@@ -26,6 +26,16 @@ __CG_VENDOR_MAP__ = MappingProxyType({
     "64": "BOE",
     "65": "BOE",
 })
+
+CmdTool: TypeAlias = Literal[
+    "halt",
+    "reboot",
+    "os_app",
+    "diags",
+    "iboot",
+    "kill_colortest",
+    "renew_units",
+]
 
 __CMD_MAP__ = MappingProxyType({
     "os_app": ("OSDToolbox appswitch -s Default",),
@@ -63,6 +73,10 @@ __SSH_PATTERNS__ = [
     pexpect.EOF,
     pexpect.TIMEOUT,
 ]
+
+
+def get_tool_list() -> list:
+    return list(get_args(CmdTool))
 
 
 def safe_get(lst: list, index: int, default=None) -> Any:
@@ -495,10 +509,7 @@ class UnitServer(AsyncDetector):
             return False, f"Failed to start draining battery: {failed_units}"
 
     def cmd_tools(self, ecids: list[str],
-                  cmd: Literal[
-                      "halt", "reboot", "os_app", "diags", "iboot",
-                      "kill_colortest", "renew_units"
-                  ]) -> Tuple[bool, str]:
+                  cmd: CmdTool) -> Tuple[bool, str]:
         self.get_detail_info([], None, True)
         success_ecids = []
         for ecid in ecids:

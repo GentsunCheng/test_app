@@ -365,3 +365,15 @@ paths:
               example:
                 status: "success"
                 drain_result: "Success send reboot"
+
+  /api/get_cmd_list:
+    get:
+      summary: 获取允许的CMD
+      description: 获取允许的CMD
+      responses:
+        200:
+          description: 成功
+          content:
+            application/json:
+              example:
+                ["halt","reboot","os_app","diags","iboot","kill_colortest","renew_units"]

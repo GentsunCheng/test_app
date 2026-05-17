@@ -1,7 +1,7 @@
 import { state } from './store.js';
 import { elements, showToast, stopLogs, openModal, closeModal, closeMethodModal, clearLogs, showConfirmDialog } from './utils.js';
 import { fetchScriptInfo, deleteScript, cleanDisabledScripts, fetchMethods, startLogStream } from './services.js';
-import { renderToolView } from './tool.js';
+import { renderToolView, refreshToolResults } from './tool.js';
 
 export function updateHostDisplay() {
     elements.currentHostNameSpan.textContent = state.currentHost.name;
@@ -483,8 +483,11 @@ export function updateMainView() {
 
     const toolView = document.getElementById('tool_view');
     if (toolView) {
-        toolView.style.display = 'block';
-        renderToolView();
+        if (toolView.style.display === 'none') {
+            renderToolView();
+        } else {
+            refreshToolResults();
+        }
     }
 }
 
