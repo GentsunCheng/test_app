@@ -14,7 +14,23 @@ const toolState = {
     _lastResultsSnapshot: '',
 };
 
-const AVAILABLE_COMMANDS = ['halt', 'reboot', 'os_app', 'diags', 'iboot', 'kill_colortest', 'renew_units', 'drain'];
+let AVAILABLE_COMMANDS = [];
+
+async function fetchAvailableCommands() {
+    try {
+        const response = await fetch(`${state.API_BASE}/api/get_cmd_list`);
+        const data = await response.json();
+        if (Array.isArray(data)) {
+            AVAILABLE_COMMANDS.length = 0;
+            AVAILABLE_COMMANDS.push(...data);
+            if (!AVAILABLE_COMMANDS.includes('drain')) {
+                AVAILABLE_COMMANDS.push('drain');
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching available commands:', error);
+    }
+}
 
 export function refreshToolResults() {
     const toolView = document.getElementById('tool_view');
@@ -22,7 +38,7 @@ export function refreshToolResults() {
     renderLoopResults();
 }
 
-export function renderToolView() {
+export async function renderToolView() {
     const toolView = document.getElementById('tool_view');
     if (!toolView) return;
     toolView.style.removeProperty('display');
@@ -37,6 +53,7 @@ export function renderToolView() {
     }
 
     if (!toolState._initialized) {
+        await fetchAvailableCommands();
         setupCmdButtons();
         setupDrainButton();
         setupLoopListDragDrop();
@@ -89,7 +106,21 @@ async function sendDrain(ecids, targetPower) {
 }
 
 function setupCmdButtons() {
-    const btns = document.querySelectorAll('.unit-tool .cmd-btn[data-cmd]');
+    const cmdContainer = document.querySelector('.unit-tool');
+    if (!cmdContainer) return;
+
+    cmdContainer.querySelectorAll('.cmd-btn[data-cmd]').forEach(btn => btn.remove());
+
+    AVAILABLE_COMMANDS.forEach(cmd => {
+        if (cmd === 'drain') return;
+        const btn = document.createElement('button');
+        btn.className = 'cmd-btn';
+        btn.dataset.cmd = cmd;
+        btn.textContent = cmd;
+        cmdContainer.appendChild(btn);
+    });
+
+    const btns = cmdContainer.querySelectorAll('.cmd-btn[data-cmd]');
     btns.forEach(btn => {
         btn.onclick = async () => {
             const cmd = btn.dataset.cmd;
