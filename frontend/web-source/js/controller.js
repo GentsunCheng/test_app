@@ -10,6 +10,7 @@ import {
     renderSettingsView,
     renderTestView
 } from './views.js';
+import { hideToolView } from './tool.js';
 
 export function handleUnitClick(e, unit) {
     stopLogs();
@@ -107,6 +108,7 @@ export function initEventListeners() {
     elements.controlButtonBar.onclick = (e) => {
         if (e.target === elements.controlButtonBar) {
             state.currentView = 'units';
+            hideToolView();
             updateMainView();
         }
     };
@@ -114,6 +116,7 @@ export function initEventListeners() {
     document.getElementById('btn_test').onclick = async () => {
         stopLogs();
         state.currentView = 'test';
+        hideToolView();
         updateMainView();
         await fetchScriptInfo(renderTestView);
     };
@@ -121,6 +124,7 @@ export function initEventListeners() {
     document.getElementById('btn_log').onclick = () => {
         stopLogs();
         state.currentView = 'logs';
+        hideToolView();
         state.lastLogSelection = ''; // Force log stream restart
         updateMainView();
     };
@@ -128,6 +132,7 @@ export function initEventListeners() {
     document.getElementById('btn_setting').onclick = () => {
         stopLogs();
         state.currentView = 'settings';
+        hideToolView();
         fetchScriptInfo(renderSettingsView);
         updateMainView();
     };

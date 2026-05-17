@@ -1,6 +1,7 @@
 import { state } from './store.js';
 import { elements, showToast, stopLogs, openModal, closeModal, closeMethodModal, clearLogs, showConfirmDialog } from './utils.js';
 import { fetchScriptInfo, deleteScript, cleanDisabledScripts, fetchMethods, startLogStream } from './services.js';
+import { renderToolView } from './tool.js';
 
 export function updateHostDisplay() {
     elements.currentHostNameSpan.textContent = state.currentHost.name;
@@ -473,11 +474,21 @@ export function updateMainView() {
     }
 
     if (state.selectedIds.size === 0) {
-        if (elements.mainContent.querySelector('#no_selection_msg')) return;
-        elements.mainContent.innerHTML = '<h1 id="no_selection_msg">StressRack Test</h1><p>Select a unit to see details or logs.</p>';
-        return;
+        if (!elements.mainContent.querySelector('#no_selection_msg')) {
+            elements.mainContent.innerHTML = '<h1 id="no_selection_msg">StressRack Test</h1><p>Select a unit to see details or logs.</p>';
+        }
+    } else {
+        renderSelectedUnitsTable();
     }
 
+    const toolView = document.getElementById('tool_view');
+    if (toolView) {
+        toolView.style.display = 'block';
+        renderToolView();
+    }
+}
+
+export function renderSelectedUnitsTable() {
     const selectedList = Array.from(state.selectedIds);
     let header = elements.mainContent.querySelector('.settings-header');
     let table = elements.mainContent.querySelector('.detail-table');

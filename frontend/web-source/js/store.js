@@ -12,7 +12,7 @@ export const state = {
     allUnits: [], // { id, type: 'normal' | 'testing', detail: null }
     selectedIds: new Set(),
     lastSelectedIndex: -1,
-    currentView: 'units', // 'units', 'settings', 'logs', or 'test'
+    currentView: 'units', // 'units', 'settings', 'logs', 'test', or 'tool'
     scriptInfo: {}, // { script_name: { path, status } }
     logAbortController: null,
     logReader: null,

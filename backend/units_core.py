@@ -45,8 +45,7 @@ __CMD_MAP__ = MappingProxyType({
         "rm -rf /var/mobile/Media/FactoryLogs/LogCollector/MMI",
         "rm -rf /var/mobile/Media/FactoryLogs/LogCollector/Wingsuit",
         "diagstool bootargs -r serial-device=0x00000083",
-        "diagstool bootargs -r astro",
-        "reboot"
+        "diagstool bootargs -r astro"
     )
 })
 
