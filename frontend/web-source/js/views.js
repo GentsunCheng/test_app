@@ -161,6 +161,123 @@ export function renderUnits(onUnitClick) {
             elements.unitListContainer.appendChild(unitEl);
         }
 
+        unitEl.oncontextmenu = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (!state.selectedIds.has(unit.id)) {
+                state.selectedIds.clear();
+                state.selectedIds.add(unit.id);
+                state.lastSelectedIndex = index;
+                renderUnits(onUnitClick);
+            }
+
+            const hasNormal = Array.from(state.selectedIds).some(id => {
+                const u = state.allUnits.find(unit => unit.id === id);
+                return u && u.type === 'normal';
+            });
+            const hasTesting = Array.from(state.selectedIds).some(id => {
+                const u = state.allUnits.find(unit => unit.id === id);
+                return u && u.type === 'testing';
+            });
+            const mixed = hasNormal && hasTesting;
+
+            const menu = document.getElementById('unit_context_menu');
+            if (!menu) return;
+
+            const inner = menu.querySelector('.ctx-inner');
+            const selectedCount = state.selectedIds.size;
+            inner.innerHTML = '';
+
+            if (!mixed && hasNormal) {
+                const cmdGroup = document.createElement('div');
+                cmdGroup.className = 'ctx-cmd-group';
+                const loading = document.createElement('div');
+                loading.className = 'ctx-loading';
+                loading.textContent = 'Loading commands...';
+                cmdGroup.appendChild(loading);
+                inner.appendChild(cmdGroup);
+
+                fetch(`${state.API_BASE}/api/get_cmd_list`)
+                    .then(r => r.json())
+                    .then(cmds => {
+                        cmdGroup.innerHTML = '';
+                        (Array.isArray(cmds) ? cmds : []).forEach(cmd => {
+                            const btn = document.createElement('button');
+                            btn.className = 'ctx-btn';
+                            btn.textContent = cmd;
+                            btn.addEventListener('click', async () => {
+                                menu.classList.remove('visible');
+                                const ecids = Array.from(state.selectedIds).filter(id => {
+                                    const u = state.allUnits.find(unit => unit.id === id);
+                                    return u && u.type === 'normal';
+                                });
+                                try {
+                                    const res = await fetch(`${state.API_BASE}/api/send_ssh_cmd`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ ecids, cmd })
+                                    });
+                                    const data = await res.json();
+                                    showToast(`${cmd}: ${data.message || 'Sent'}`, data.status === 'success' ? 'success' : 'error');
+                                } catch (err) {
+                                    showToast(`${cmd}: Failed`, 'error');
+                                }
+                            });
+                            cmdGroup.appendChild(btn);
+                        });
+                    })
+                    .catch(() => {
+                        cmdGroup.innerHTML = '<div class="ctx-btn" style="opacity:0.5;cursor:default;">Failed to load</div>';
+                    });
+
+                const sep = document.createElement('div');
+                sep.className = 'ctx-sep';
+                inner.appendChild(sep);
+            }
+
+            if (!mixed && hasTesting) {
+                const forceBtn = document.createElement('button');
+                forceBtn.className = 'ctx-btn ctx-danger';
+                forceBtn.textContent = 'Force Quit';
+                forceBtn.addEventListener('click', async () => {
+                    menu.classList.remove('visible');
+                    const units = Array.from(state.selectedIds).filter(id => {
+                        const u = state.allUnits.find(unit => unit.id === id);
+                        return u && u.type === 'testing';
+                    });
+                    try {
+                        const res = await fetch(`${state.API_BASE}/api/force_quit`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ units })
+                        });
+                        const data = await res.json();
+                        showToast(`Force quit: ${data.message || 'Done'}`, 'success');
+                    } catch (err) {
+                        showToast('Force quit failed', 'error');
+                    }
+                });
+                inner.appendChild(forceBtn);
+
+                const sep = document.createElement('div');
+                sep.className = 'ctx-sep';
+                inner.appendChild(sep);
+            }
+
+            const infoBtn = document.createElement('button');
+            infoBtn.className = 'ctx-btn';
+            infoBtn.textContent = `Info (${selectedCount})`;
+            infoBtn.addEventListener('click', () => {
+                menu.classList.remove('visible');
+            });
+            inner.appendChild(infoBtn);
+
+            menu.style.left = e.clientX + 'px';
+            menu.style.top = e.clientY + 'px';
+            menu.classList.add('visible');
+        };
+
         const currentClassName = `unit ${isSelected ? 'selected' : ''}`;
         if (unitEl.className !== currentClassName) unitEl.className = currentClassName;
         unitEl.dataset.index = index;
@@ -211,6 +328,21 @@ export function renderUnits(onUnitClick) {
     existingElements.forEach(el => {
         if (!currentIds.has(el.dataset.id)) el.remove();
     });
+
+    if (!document.getElementById('unit_context_menu')) {
+        const ctxMenu = document.createElement('div');
+        ctxMenu.id = 'unit_context_menu';
+        ctxMenu.className = 'context-menu';
+        ctxMenu.innerHTML = '<div class="ctx-inner"></div>';
+        document.body.appendChild(ctxMenu);
+
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('unit_context_menu');
+            if (menu && menu.classList.contains('visible') && !menu.contains(e.target)) {
+                menu.classList.remove('visible');
+            }
+        });
+    }
 }
 
 export function renderSettingsView() {

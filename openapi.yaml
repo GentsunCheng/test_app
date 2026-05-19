@@ -59,7 +59,7 @@ paths:
           content:
             application/json:
               example:
-                ["0010441438002936", "0010441438002675"]
+                ["0010441438002936", "0010441438002675", "0010441438002676", "0010441438002677"]
 
   /api/testing_ecids:
     get:
@@ -71,7 +71,7 @@ paths:
           content:
             application/json:
               example:
-                ["0010441438002675"]
+                ["0010441438002675", "0010441438003321"]
 
   /api/detail_info:
     post:
@@ -105,6 +105,24 @@ paths:
                   serial_number: "F2029KV7R1"
                   sw_vers: "24A62611c"
                   unit_number: "025178"
+                0010441438002676:
+                  battery: "86"
+                  cg_vendor: "LGD"
+                  temperature: "30.000000"
+                  check_timestamp: 1776196934
+                  config: "5G13S"
+                  serial_number: "A8WQ7MUQ2D"
+                  sw_vers: "24A62611c"
+                  unit_number: "000312"
+                0010441438002677:
+                  battery: "10"
+                  cg_vendor: "SDC"
+                  temperature: "42.000000"
+                  check_timestamp: 1776196934
+                  config: "2KS2A"
+                  serial_number: "EM6R8FYWZX"
+                  sw_vers: "24A62611c"
+                  unit_number: "00276"
 
 
   /api/logs:
@@ -311,6 +329,31 @@ paths:
                 status: "success"
                 test_method: "run_test"
                 units: ["0010441438002936"]
+
+  /api/force_quit:
+    post:
+      summary: 强制退出当前测试脚本
+      description: 强制退出当前测试脚本
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                units:
+                  type: array
+                  items:
+                    type: string
+              example:
+                units: ["ECID1", "ECID2"]
+      responses:
+        200:
+          description: 成功
+          content:
+            application/json:
+              example:
+                units: ["0010441438002675", "0010441438003321"]
 
   /api/drain_battery:
     post:

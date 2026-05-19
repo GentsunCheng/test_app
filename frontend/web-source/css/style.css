@@ -1393,6 +1393,12 @@ body, html {
     gap: 2px;
 }
 
+.ctx-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
 .ctx-btn {
     display: block;
     width: 100%;
@@ -1416,4 +1422,31 @@ body, html {
 
 .ctx-btn:active {
     background-color: rgba(0, 122, 255, 0.15);
+}
+
+.ctx-btn.ctx-danger {
+    color: var(--error-color);
+}
+
+.ctx-btn.ctx-danger:hover {
+    background-color: rgba(255, 59, 48, 0.08);
+    color: var(--error-color);
+}
+
+.ctx-btn.ctx-danger:active {
+    background-color: rgba(255, 59, 48, 0.15);
+}
+
+.ctx-sep {
+    height: 1px;
+    background: var(--border-color);
+    margin: 4px 0;
+    flex-shrink: 0;
+}
+
+.ctx-loading {
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-style: italic;
 }
