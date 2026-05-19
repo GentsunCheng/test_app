@@ -155,6 +155,13 @@ export function initEventListeners() {
         }
     };
 
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && elements.methodModalOverlay.style.display === 'flex' && !elements.btnMethodConfirm.disabled && document.activeElement !== elements.methodSearchInput) {
+            e.preventDefault();
+            elements.btnMethodConfirm.click();
+        }
+    });
+
     elements.methodSearchInput.oninput = filterMethods;
     elements.btnSearchRegex.onclick = function() {
         state.isSearchRegex = !state.isSearchRegex;
