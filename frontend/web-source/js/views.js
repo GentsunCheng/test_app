@@ -304,6 +304,16 @@ export function renderSettingsView() {
     });
 }
 
+function getPinnedScripts() {
+    try {
+        return JSON.parse(localStorage.getItem('pinnedScripts') || '[]');
+    } catch { return []; }
+}
+
+function savePinnedScripts(names) {
+    localStorage.setItem('pinnedScripts', JSON.stringify(names));
+}
+
 export function renderTestView() {
     const normalEcids = Array.from(state.selectedIds).filter(id => {
         const unit = state.allUnits.find(u => u.id === id);
@@ -345,10 +355,18 @@ export function renderTestView() {
     existingElements.forEach(el => elementMap.set(el.dataset.name, el));
 
     const currentNames = new Set();
+    const pinnedScripts = getPinnedScripts();
     const sortedEntries = Object.entries(state.scriptInfo)
         .sort(([, a], [, b]) => {
             if (a.status && !b.status) return -1;
             if (!a.status && b.status) return 1;
+            return 0;
+        })
+        .sort(([aName], [bName]) => {
+            const aPinned = pinnedScripts.includes(aName);
+            const bPinned = pinnedScripts.includes(bName);
+            if (aPinned && !bPinned) return -1;
+            if (!aPinned && bPinned) return 1;
             return 0;
         });
     sortedEntries.forEach(([name, info], index) => {
@@ -360,12 +378,22 @@ export function renderTestView() {
             item = document.createElement('div');
             item.dataset.name = name;
             item.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span class="status-dot"></span>
-                    <div class="script-name" style="font-weight: bold;"></div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span class="status-dot"></span>
+                        <div class="script-name" style="font-weight: bold;"></div>
+                    </div>
+                    <div class="script-path" style="font-size: 0.85em; opacity: 0.8; margin-top: 4px; padding-left: 16px;"></div>
                 </div>
-                <div class="script-path" style="font-size: 0.85em; opacity: 0.8; margin-top: 4px; padding-left: 16px;"></div>
+                <div class="pin-icon" style="display: none; flex-shrink: 0; margin-left: 8px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="17" x2="12" y2="22"></line>
+                        <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
+                    </svg>
+                </div>
             `;
+            item.style.display = 'flex';
+            item.style.alignItems = 'center';
             listContainer.appendChild(item);
         }
 
@@ -373,7 +401,23 @@ export function renderTestView() {
         item.querySelector('.status-dot').className = `status-dot ${info.status ? 'online' : 'offline'}`;
         item.querySelector('.script-name').textContent = name;
         item.querySelector('.script-path').textContent = info.path;
+        const pinIcon = item.querySelector('.pin-icon');
+        pinIcon.style.display = pinnedScripts.includes(name) ? '' : 'none';
         item.onclick = info.status ? () => fetchMethods(name, renderMethodModal) : null;
+
+        item.oncontextmenu = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const menu = document.getElementById('script_context_menu');
+            if (!menu) return;
+            menu.style.left = e.clientX + 'px';
+            menu.style.top = e.clientY + 'px';
+            menu.dataset.scriptName = name;
+            menu.dataset.scriptPath = info.path;
+            const pinBtn = menu.querySelector('.ctx-pin');
+            pinBtn.textContent = pinnedScripts.includes(name) ? 'Unpin' : 'Pin';
+            menu.classList.add('visible');
+        };
 
         if (listContainer.children[index] !== item) listContainer.insertBefore(item, listContainer.children[index]);
     });
@@ -381,6 +425,70 @@ export function renderTestView() {
     existingElements.forEach(el => {
         if (!currentNames.has(el.dataset.name)) el.remove();
     });
+
+    if (!document.getElementById('script_context_menu')) {
+        const ctxMenu = document.createElement('div');
+        ctxMenu.id = 'script_context_menu';
+        ctxMenu.className = 'context-menu';
+        ctxMenu.innerHTML = `
+            <button class="ctx-btn ctx-pin" data-action="pin">Pin</button>
+            <button class="ctx-btn ctx-reload" data-action="reload">Reload</button>
+        `;
+        document.body.appendChild(ctxMenu);
+
+        ctxMenu.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.ctx-btn');
+            if (!btn) return;
+            const action = btn.dataset.action;
+            const scriptName = ctxMenu.dataset.scriptName;
+            const scriptPath = ctxMenu.dataset.scriptPath;
+            if (!scriptName) return;
+            ctxMenu.classList.remove('visible');
+
+            if (action === 'pin') {
+                const pinned = getPinnedScripts();
+                const idx = pinned.indexOf(scriptName);
+                if (idx >= 0) pinned.splice(idx, 1);
+                else pinned.push(scriptName);
+                savePinnedScripts(pinned);
+                renderTestView();
+            } else if (action === 'reload') {
+                try {
+                    const removeRes = await fetch(`${state.API_BASE}/api/remove_test_script`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ script_name: scriptName })
+                    });
+                    const removeData = await removeRes.json();
+                    if (removeData.status === 'success') {
+                        const addRes = await fetch(`${state.API_BASE}/api/add_test_script`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ script_name: scriptName, script_path: scriptPath })
+                        });
+                        const addData = await addRes.json();
+                        if (addData.status === 'success') {
+                            showToast(`Reloaded: ${scriptName}`, 'success');
+                        } else {
+                            showToast(`Failed to reload: ${addData.message || 'Unknown error'}`, 'error');
+                        }
+                    } else {
+                        showToast(`Failed to remove: ${removeData.message || 'Unknown error'}`, 'error');
+                    }
+                } catch (err) {
+                    showToast('Failed to reload script', 'error');
+                }
+                fetchScriptInfo(renderTestView);
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('script_context_menu');
+            if (menu && menu.classList.contains('visible') && !menu.contains(e.target)) {
+                menu.classList.remove('visible');
+            }
+        });
+    }
 }
 
 export function renderMethodModal(scriptName, methods) {

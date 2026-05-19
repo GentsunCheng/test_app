@@ -1373,3 +1373,47 @@ body, html {
 .loop-table td.result-cell.retryable:hover {
     background-color: rgba(255, 59, 48, 0.08);
 }
+
+/* Context Menu */
+.context-menu {
+    position: fixed;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    padding: 6px;
+    display: none;
+    z-index: 2000;
+    min-width: 120px;
+}
+
+.context-menu.visible {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ctx-btn {
+    display: block;
+    width: 100%;
+    padding: 10px 16px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-main);
+    text-align: left;
+    border-radius: 4px;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+}
+
+.ctx-btn:hover {
+    background-color: rgba(0, 122, 255, 0.08);
+    color: var(--primary-color);
+}
+
+.ctx-btn:active {
+    background-color: rgba(0, 122, 255, 0.15);
+}
