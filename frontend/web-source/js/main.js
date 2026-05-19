@@ -3,6 +3,7 @@ import { getRefreshRates } from './utils.js';
 import { fetchUnits, fetchScriptInfo } from './services.js';
 import { updateHostDisplay, renderUnits, updateMainView, renderSettingsView, renderTestView } from './views.js';
 import { initEventListeners, handleUnitClick } from './controller.js';
+import { refreshAllTTLs } from './detailCache.js';
 
 function updateIntervals() {
     const rates = getRefreshRates();
@@ -71,4 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.currentView === 'settings') fetchScriptInfo(renderSettingsView);
         if (state.currentView === 'test') fetchScriptInfo(renderTestView);
     }, initialRates.scripts);
+
+    setInterval(refreshAllTTLs, 60000);
 });

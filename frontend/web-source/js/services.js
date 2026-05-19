@@ -1,5 +1,6 @@
 import { state } from './store.js';
 import { showToast, stopLogs } from './utils.js';
+import { getCachedDetail, updateCachedDetail } from './detailCache.js';
 
 const NORMAL_UNIT_REMOVAL_GRACE_MS = 300;
 
@@ -100,6 +101,16 @@ export async function fetchUnits(renderCallback) {
         state.selectedIds = updatedSelectedIds;
         state.allUnits = newUnits;
 
+        if (normalToFetchDetails.length > 0) {
+            normalToFetchDetails.forEach(id => {
+                const unit = state.allUnits.find(u => u.id === id);
+                if (unit && !unit.detail) {
+                    const cached = getCachedDetail(id);
+                    if (cached) unit.detail = cached;
+                }
+            });
+        }
+
         if (renderCallback) renderCallback();
 
         if (normalToFetchDetails.length > 0) {
@@ -123,12 +134,26 @@ export async function fetchDetails(ecids, requestSeq = state.unitsRequestSeq) {
 
         if (requestSeq !== state.unitsRequestSeq) return false;
 
+        let changed = false;
         state.allUnits.forEach(unit => {
             if (unit.type === 'normal' && details[unit.id]) {
-                unit.detail = details[unit.id];
+                const newDetail = details[unit.id];
+                const oldDetail = unit.detail;
+                const cacheUpdated = updateCachedDetail(unit.id, newDetail);
+                unit.detail = newDetail;
+                if (cacheUpdated) changed = true;
+                else if (!oldDetail) changed = true;
+                else {
+                    for (const key of Object.keys(newDetail)) {
+                        if (newDetail[key] !== oldDetail[key]) {
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
             }
         });
-        return true;
+        return changed;
     } catch (error) {
         console.error('Error fetching details:', error);
         return false;
