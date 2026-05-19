@@ -504,7 +504,7 @@ export function renderTestView() {
     sortedEntries.forEach(([name, info], index) => {
         currentNames.add(name);
         let item = elementMap.get(name);
-        const currentClassName = `script-selection-item ${!info.status ? 'disabled' : ''}`;
+        const currentClassName = `script-selection-item ${!info.status ? 'disabled' : ''}${pinnedScripts.includes(name) ? ' pinned' : ''}`;
 
         if (!item) {
             item = document.createElement('div');

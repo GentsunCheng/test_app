@@ -849,6 +849,14 @@ body, html {
     opacity: 0.7;
 }
 
+.script-selection-item.pinned {
+    background-color: #fffdf6;
+}
+
+.script-selection-item.pinned:hover {
+    border-color: #fff5d0;
+}
+
 .method-list {
     max-height: 350px;
     overflow-y: auto;
