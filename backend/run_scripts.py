@@ -423,6 +423,7 @@ class TestScript:
             self.__testing_data_size__.update({ecid: data.get("data_size", "0K") for ecid, data in units.items()})
             if not self.__adjust_space__():
                 return False, "Space not enough"
+        order = -1
         for ecid, data in units.items():
             info = {ecid: data}
             info[ecid]["test_method"] = test_method
@@ -431,7 +432,9 @@ class TestScript:
             thread = threading.Thread(target=self.__run_process__,
                                       args=(test_method, ecid, log_buffer, script_name, info,))
             thread.start()
+            order += 1
             self.__testing_dict__[ecid] = {
+                "order": order,
                 "log_stream": log_buffer,
                 "thread": thread,
                 "process": None,
@@ -510,6 +513,8 @@ class TestScript:
         cmd = __get_cmd__(test_method, ecid)
         if not cmd:
             return False
+        order = self.__testing_dict__.get(ecid, {}).get("order", 0)
+        time.sleep(abs(order * 0.15))
         process = sp.Popen(
             cmd,
             stdout=sp.PIPE,

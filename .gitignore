@@ -17,6 +17,7 @@ Icon
 .vscode/
 *.swp
 *.swo
+.qoderignore
 *~
 
 # Python 项目

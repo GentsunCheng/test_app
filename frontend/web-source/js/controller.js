@@ -105,6 +105,16 @@ export function initEventListeners() {
         }
     };
 
+    elements.unitListContainer.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && (e.key === 'a' || e.key === 'A')) {
+            e.preventDefault();
+            state.allUnits.forEach(unit => state.selectedIds.add(unit.id));
+            state.lastSelectedIndex = state.allUnits.length - 1;
+            renderUnits(handleUnitClick);
+            updateMainView();
+        }
+    });
+
     elements.controlButtonBar.onclick = (e) => {
         if (e.target === elements.controlButtonBar) {
             state.currentView = 'units';

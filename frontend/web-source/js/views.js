@@ -523,6 +523,34 @@ export function renderSelectedUnitsTable() {
     }).join('');
 
     if (tbody.innerHTML !== newBodyHtml) tbody.innerHTML = newBodyHtml;
+
+    if (!tbody.dataset.dblcopy) {
+        tbody.dataset.dblcopy = '1';
+        tbody.addEventListener('dblclick', (e) => {
+            const td = e.target.closest('td');
+            if (!td) return;
+            const text = td.textContent;
+            const doCopy = (t) => {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = t;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    showToast(`Copied: ${t}`, 'success');
+                    return true;
+                } catch (err) {
+                    return false;
+                }
+            };
+            if (!doCopy(text)) {
+                showToast('Failed to copy', 'error');
+            }
+        });
+    }
 }
 
 export function renderLogView() {

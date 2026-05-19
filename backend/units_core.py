@@ -16,7 +16,7 @@ from multiprocessing.shared_memory import SharedMemory
 import pickle
 import tempfile
 import traceback
-from typing import Union, Callable, Tuple, Any, Literal, TypeAlias, get_args
+from typing import Callable, Tuple, Any, Literal, TypeAlias, get_args
 from types import MappingProxyType
 
 __CG_VENDOR_MAP__ = MappingProxyType({
@@ -33,19 +33,18 @@ CmdTool: TypeAlias = Literal[
     "os_app",
     "diags",
     "iboot",
-    "kill_colortest",
     "renew_units",
 ]
 
 __CMD_MAP__ = MappingProxyType({
-    "os_app": ("OSDToolbox appswitch -s Default",),
-    "diags": ("nvram auto-boot=true", "nvram boot-command=diags", "reboot"),
-    "iboot": ("nvram auto-boot=false", "reboot"),
-    "kill_colortest": (
+    "os_app": (
         "killall -9 colortest",
         "killall -9 luacore",
-        "SignageTool close"
+        "SignageTool close",
+        "OSDToolbox appswitch -s Default"
     ),
+    "diags": ("nvram auto-boot=true", "nvram boot-command=diags", "reboot"),
+    "iboot": ("nvram auto-boot=false", "reboot"),
     "renew_units": (
         "rm -rf /var/root/results",
         "rm *.log *.csv *.txt *.tgz *.sh *.py *.ini *.json *.jpg *.dd *raw *meta *.plist",
@@ -101,7 +100,7 @@ def random_port(debug: bool = False, try_count: int = 1000) -> int:
     return 5000
 
 
-def file_hash(file_path: Union[Path, str], hash_algorithm: Literal["sha256", "sha384", "sha512"] = "sha256") -> str:
+def file_hash(file_path: Path | str, hash_algorithm: Literal["sha256", "sha384", "sha512"] = "sha256") -> str:
     if isinstance(file_path, str) and not os.path.exists(file_path):
         return ""
     elif isinstance(file_path, Path) and not file_path.exists():
@@ -113,7 +112,7 @@ def file_hash(file_path: Union[Path, str], hash_algorithm: Literal["sha256", "sh
     return hash_func.hexdigest()
 
 
-def are_files_equal(file1: Union[Path, str], file2: Union[Path, str]) -> bool:
+def are_files_equal(file1: Path | str, file2: Path | str) -> bool:
     return file_hash(file1) == file_hash(file2)
 
 
@@ -232,7 +231,7 @@ class AsyncDetector:
         self.__shm__.close()
         self.__shm__.unlink(missing_ok=True)
 
-    def get_ecids(self, full: bool = False) -> Union[dict, list]:
+    def get_ecids(self, full: bool = False) -> dict | list:
         data = {} if full else []
         if self.__running__ and self.__shm__:
             buf = self.__shm__.buf
@@ -275,7 +274,7 @@ class AsyncDetector:
         return process
 
     @staticmethod
-    def __shell_pexpect__(cmd: str) -> Union[pexpect.spawn, bool]:
+    def __shell_pexpect__(cmd: str) -> pexpect.spawn | bool:
         child = pexpect.spawn(cmd)
         index = child.expect(__SSH_PATTERNS__, timeout=30)
         if index in __SSH_ERR_MSGS__:
@@ -366,8 +365,6 @@ class AsyncDetector:
         except Exception as e:
             print(f"SSH execute failed: {e}")
             return True, [""]
-        finally:
-            ssh.close()
 
     def get_detail_info(self, running_ecids: list[str], ecids=None, force=False) -> dict:
         ser_ecids = self.get_ecids(full=True)
@@ -463,7 +460,7 @@ class UnitServer(AsyncDetector):
         super().__init__()
         self.__base_path__ = base_path
 
-    def __rsync_to_units__(self, port: int, source: str, target: str) -> Tuple[bool, str]:
+    def __rsync_core__(self, port: int, source: str, target: str) -> Tuple[bool, str]:
         rsync_cmd = [
             "rsync",
             "-avcz",
@@ -524,14 +521,14 @@ class UnitServer(AsyncDetector):
             failed_units = ", ".join([ecid for ecid in ecids if ecid not in success_ecids])
             return False, f"Failed to send {cmd}: {failed_units}"
 
-    def upload_file_to_unit(self, ecid: str) -> Union[Tuple[
+    def upload_file_to_unit(self, ecid: str) -> Tuple[
         Callable[
-            [Union[str, Path], str, Literal],
+            [str | Path, str, Literal],
             Tuple[bool, int, str]
         ], Callable[
-            [Union[str, Path], str, Literal],
+            [str | Path, str, Literal],
             Tuple[bool, str]]
-    ], bool]:
+    ] | bool:
         self.get_detail_info([], None, True)
         port = self.__process_dict__.get(ecid, {}).get("port", None)
         unit_temp_path = None
@@ -546,11 +543,11 @@ class UnitServer(AsyncDetector):
         shasum_tool = self.__base_path__.joinpath("unit_tools/shasum.py")
         unit_shasum_path = None
         _unit_shasum_path = "/var/root/shasum_tool"
-        rsync_result, _ = self.__rsync_to_units__(port, str(shasum_tool), f"root@localhost:{_unit_shasum_path}")
+        rsync_result, _ = self.__rsync_core__(port, str(shasum_tool), f"root@localhost:{_unit_shasum_path}")
         if rsync_result:
             unit_shasum_path = _unit_shasum_path
 
-        def upload(file_part: Union[str, Path],
+        def upload(file_part: str | Path,
                    sha_value: str = "",
                    sha_option: Literal["sha1", "sha224", "sha256", "sha384", "sha512"] = "sha1"
                    ) -> Tuple[bool, int, str]:
@@ -558,7 +555,7 @@ class UnitServer(AsyncDetector):
             if not Path(file_part).exists():
                 return False, 409, f"File {file_part} does not exist"
             target_file = Path(unit_temp_path) / Path(file_part).name
-            result, _ = self.__rsync_to_units__(port, file_part, f"root@localhost:{target_file}")
+            result, _ = self.__rsync_core__(port, file_part, f"root@localhost:{target_file}")
             if result:
                 if unit_shasum_path and sha_value:
                     shasum_cmd = f'python3 {unit_shasum_path} {sha_option} {target_file}'
@@ -570,7 +567,7 @@ class UnitServer(AsyncDetector):
                         return False, 409, "Sha result mismatch"
             return True, 200 if result else 400, f"Success upload {file_part}" if result else f"Failed to upload {file_part}"
 
-        def merge(target_path: Union[str, Path],
+        def merge(target_path: str | Path,
                   sha_value: str = "",
                   sha_option: Literal["sha1", "sha224", "sha256", "sha384", "sha512"] = "sha1"
                   ) -> Tuple[bool, str]:
@@ -593,6 +590,9 @@ class UnitServer(AsyncDetector):
                 return True, f"Success merge {target_path}"
 
         return upload, merge
+
+    def download_file_from_unit(self, ecid: str, file_path: str | Path):
+        pass
 
 
 if __name__ == '__main__':
