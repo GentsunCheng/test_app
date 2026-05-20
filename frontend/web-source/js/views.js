@@ -1,7 +1,15 @@
 import { state } from './store.js';
-import { elements, showToast, stopLogs, openModal, closeModal, closeMethodModal, clearLogs, showConfirmDialog } from './utils.js';
+import { elements, showToast, stopLogs, openModal, closeModal, closeMethodModal, clearLogs, showConfirmDialog, showMoreDetailInfo } from './utils.js';
 import { fetchScriptInfo, deleteScript, cleanDisabledScripts, fetchMethods, startLogStream } from './services.js';
 import { renderToolView, refreshToolResults } from './tool.js';
+
+function truncatePath(path, maxParts = 2) {
+    const parts = path.split('/');
+    if (parts.length <= maxParts * 2 + 1) return path;
+    const head = parts.slice(0, maxParts).join('/');
+    const tail = parts.slice(-maxParts).join('/');
+    return head + '/.../' + tail;
+}
 
 export function updateHostDisplay() {
     elements.currentHostNameSpan.textContent = state.currentHost.name;
@@ -272,6 +280,7 @@ export function renderUnits(onUnitClick) {
             infoBtn.textContent = `Info (${selectedCount})`;
             infoBtn.addEventListener('click', () => {
                 menu.classList.remove('visible');
+                showMoreDetailInfo();
             });
             inner.appendChild(infoBtn);
 
@@ -475,9 +484,46 @@ export function renderTestView() {
         elements.mainContent.innerHTML = `
             <div class="settings-header">
                 <h1 id="test_view_title"></h1>
+                <div class="view-toggle">
+                    <button id="btn_view_list" class="view-toggle-btn" title="List view">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    </button>
+                    <button id="btn_view_grid" class="view-toggle-btn" title="Grid view">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    </button>
+                </div>
             </div>
-            <div class="script-selection-list"></div>
+            <div class="script-selection-list ${state.scriptViewMode === 'grid' ? 'grid-view' : 'list-view'}"></div>
         `;
+        document.getElementById('btn_view_list').onclick = () => {
+            state.scriptViewMode = 'list';
+            localStorage.setItem('scriptViewMode', 'list');
+            renderTestView();
+        };
+        document.getElementById('btn_view_grid').onclick = () => {
+            state.scriptViewMode = 'grid';
+            localStorage.setItem('scriptViewMode', 'grid');
+            renderTestView();
+        };
+        updateViewToggleActive();
+    } else {
+        const list = elements.mainContent.querySelector('.script-selection-list');
+        if (state.scriptViewMode === 'grid') {
+            list.classList.remove('list-view');
+            list.classList.add('grid-view');
+        } else {
+            list.classList.remove('grid-view');
+            list.classList.add('list-view');
+        }
+        updateViewToggleActive();
+    }
+
+    function updateViewToggleActive() {
+        const btnList = document.getElementById('btn_view_list');
+        const btnGrid = document.getElementById('btn_view_grid');
+        if (!btnList || !btnGrid) return;
+        btnList.classList.toggle('active', state.scriptViewMode === 'list');
+        btnGrid.classList.toggle('active', state.scriptViewMode === 'grid');
     }
 
     const titleEl = document.getElementById('test_view_title');
@@ -526,15 +572,19 @@ export function renderTestView() {
                     </svg>
                 </div>
             `;
-            item.style.display = 'flex';
-            item.style.alignItems = 'center';
             listContainer.appendChild(item);
         }
 
         if (item.className !== currentClassName) item.className = currentClassName;
         item.querySelector('.status-dot').className = `status-dot ${info.status ? 'online' : 'offline'}`;
         item.querySelector('.script-name').textContent = name;
-        item.querySelector('.script-path').textContent = info.path;
+        const pathEl = item.querySelector('.script-path');
+        if (state.scriptViewMode === 'grid') {
+            pathEl.textContent = truncatePath(info.path);
+        } else {
+            pathEl.textContent = info.path;
+        }
+        pathEl.title = info.path;
         const pinIcon = item.querySelector('.pin-icon');
         pinIcon.style.display = pinnedScripts.includes(name) ? '' : 'none';
         item.onclick = info.status ? () => fetchMethods(name, renderMethodModal) : null;

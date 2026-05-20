@@ -1,4 +1,153 @@
 import { state } from './store.js';
+import { fetchMoreDetailInfo } from './services.js';
+
+const FIELD_LABELS = {
+    ecid: 'ECID',
+    serial_number: 'Serial Number',
+    unit_number: 'Unit Number',
+    sw_vers: 'Software Version',
+    config: 'Config',
+    cg_vendor: 'CG Vendor',
+    battery: 'Battery',
+    temperature: 'Temperature',
+    check_timestamp: 'Check Timestamp'
+};
+
+const DETAIL_INFO_EXCLUDED_FIELDS = ['check_timestamp'];
+const DETAIL_INFO_POLL_INTERVAL_MS = 2000;
+
+let detailInfoPollTimer = null;
+let detailInfoPollEcids = [];
+let detailInfoCopySetup = false;
+
+function getFieldLabel(field) {
+    return FIELD_LABELS[field] || field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function renderDetailInfoContent(data, ecids) {
+    const content = elements.detailInfoContent;
+    let html = '';
+    ecids.forEach(ecid => {
+        const detail = data[ecid];
+        if (!detail) {
+            html += `
+                <div class="detail-info-section">
+                    <div class="detail-info-ecid">${ecid}</div>
+                    <div class="detail-info-empty">No data available</div>
+                </div>
+            `;
+            return;
+        }
+        html += `<div class="detail-info-section"><div class="detail-info-ecid">${ecid}</div><div class="detail-info-grid">`;
+        for (const [key, value] of Object.entries(detail)) {
+            if (DETAIL_INFO_EXCLUDED_FIELDS.includes(key)) continue;
+            html += `<div class="detail-info-item"><span class="detail-info-label">${getFieldLabel(key)}</span><span class="detail-info-value" data-field="${key}">${value !== null && value !== undefined ? value : '-'}</span></div>`;
+        }
+        html += '</div></div>';
+    });
+    content.innerHTML = html;
+}
+
+function setupCopyOnDoubleClick() {
+    if (detailInfoCopySetup) return;
+    detailInfoCopySetup = true;
+
+    elements.detailInfoContent.addEventListener('dblclick', (e) => {
+        let target = e.target.closest('.detail-info-value, .detail-info-label');
+        if (!target) {
+            target = e.target.closest('.detail-info-item');
+            if (!target) return;
+            target = target.querySelector('.detail-info-value');
+            if (!target) return;
+        }
+        if (target.classList.contains('detail-info-label')) {
+            const item = target.closest('.detail-info-item');
+            if (!item) return;
+            const valueEl = item.querySelector('.detail-info-value');
+            if (!valueEl) return;
+            target = valueEl;
+        }
+
+        const text = target.textContent;
+        if (!text || text === '-') return;
+
+        navigator.clipboard.writeText(text).then(() => {
+            showToast(`Copied: ${text}`, 'success');
+        }).catch(() => {
+            const sel = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(target);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            document.execCommand('copy');
+            sel.removeAllRanges();
+            showToast(`Copied: ${text}`, 'success');
+        });
+    });
+}
+
+function updateDetailInfoContent(data) {
+    const sections = elements.detailInfoContent.querySelectorAll('.detail-info-section');
+    sections.forEach(section => {
+        const ecidEl = section.querySelector('.detail-info-ecid');
+        if (!ecidEl) return;
+        const ecid = ecidEl.textContent;
+        const detail = data[ecid];
+        if (!detail) return;
+
+        const valueCells = section.querySelectorAll('.detail-info-value[data-field]');
+        valueCells.forEach(cell => {
+            const fieldKey = cell.dataset.field;
+            const rawValue = detail[fieldKey];
+            if (rawValue !== undefined && rawValue !== null) {
+                cell.textContent = String(rawValue);
+            }
+        });
+    });
+}
+
+async function pollDetailInfo() {
+    if (detailInfoPollEcids.length === 0) return;
+    try {
+        const data = await fetchMoreDetailInfo(detailInfoPollEcids);
+        updateDetailInfoContent(data);
+    } catch (e) {
+        // silent
+    }
+}
+
+export function showMoreDetailInfo() {
+    const selectedIds = Array.from(state.selectedIds);
+    if (selectedIds.length === 0) return;
+
+    detailInfoPollEcids = selectedIds;
+
+    const overlay = elements.detailInfoModalOverlay;
+    const content = elements.detailInfoContent;
+    content.innerHTML = '<div class="detail-info-loading">Loading...</div>';
+    overlay.style.display = 'flex';
+
+    fetchMoreDetailInfo(selectedIds)
+        .then(data => {
+            renderDetailInfoContent(data, selectedIds);
+            setupCopyOnDoubleClick();
+            if (detailInfoPollTimer) clearInterval(detailInfoPollTimer);
+            detailInfoPollTimer = setInterval(pollDetailInfo, DETAIL_INFO_POLL_INTERVAL_MS);
+        })
+        .catch(() => {
+            content.innerHTML = '<div class="detail-info-empty">Failed to load detail info</div>';
+        });
+}
+
+export function closeMoreDetailInfo() {
+    if (detailInfoPollTimer) {
+        clearInterval(detailInfoPollTimer);
+        detailInfoPollTimer = null;
+    }
+    detailInfoPollEcids = [];
+    elements.detailInfoModalOverlay.style.display = 'none';
+    elements.detailInfoContent.innerHTML = '';
+}
 
 export const elements = {
     hostModalOverlay: document.getElementById('host_modal_overlay'),
@@ -29,7 +178,10 @@ export const elements = {
     btnModalCancel: document.getElementById('btn_modal_cancel'),
     btnMethodCancel: document.getElementById('btn_method_cancel'),
     btnModalAdd: document.getElementById('btn_modal_add'),
-    btnScanScript: document.getElementById('btn_scan_script')
+    btnScanScript: document.getElementById('btn_scan_script'),
+    detailInfoModalOverlay: document.getElementById('detail_info_modal_overlay'),
+    detailInfoContent: document.getElementById('detail_info_content'),
+    btnDetailInfoClose: document.getElementById('btn_detail_info_close')
 };
 
 export function showToast(message, type) {

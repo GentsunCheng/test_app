@@ -31,7 +31,8 @@ export const state = {
     unitsInterval: null,
     scriptsInterval: null,
     missingNormalUnitSince: new Map(), // { ecid -> timestamp when first missing from both lists }
-    unitsRequestSeq: 0
+    unitsRequestSeq: 0,
+    scriptViewMode: localStorage.getItem('scriptViewMode') || 'list'
 };
 
 // Initialize currentHost and API_BASE

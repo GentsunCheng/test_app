@@ -187,8 +187,20 @@ paths:
                 DOE343:
                   path: "/Users/Mac/Desktop/DOE/DOE343_FactoryCoexXXX_V319_S"
                   status: false
-                common:
+                DOE344:
+                  path: "/Users/Mac/Desktop/DOE/DOE344_FactoryCoexXXX_V319_S"
+                  status: true
+                DOE345:
+                  path: "/Users/Mac/Desktop/DOE/DOE345_FactoryCoexXXX_V319_S"
+                  status: false
+                DOE3436:
+                  path: "/Users/Mac/Desktop/DOE/DOE346_FactoryCoexXXX_V319_S"
+                  status: false
+                fix_essex:
                   path: "/Users/Mac/Desktop/Al_EVT_Factory/FactoryCoexXXX_V319_fix_essex"
+                  status: true
+                fix_pinacle:
+                  path: "/Users/Mac/Desktop/Al_EVT_Factory/FactoryCoexXXX_V319_fix_pinacle"
                   status: true
 
 
@@ -234,7 +246,27 @@ paths:
               example:
                 status: "success"
                 methods:
-                  common:
+                  fix_essex:
+                    - "a173aod"
+                    - "a173camera"
+                    - "a173peridot"
+                    - "a173sensors"
+                    - "a173ttw"
+                    - "aod"
+                    - "b390aod"
+                    - "b390camera"
+                    - ...
+                  fix_pinacle:
+                    - "a173aod"
+                    - "a173camera"
+                    - "a173peridot"
+                    - "a173sensors"
+                    - "a173ttw"
+                    - "aod"
+                    - "b390aod"
+                    - "b390camera"
+                    - ...
+                  DOE344:
                     - "a173aod"
                     - "a173camera"
                     - "a173peridot"

@@ -359,3 +359,18 @@ export async function startLogStream(renderHeaderCallback, logLineCallback) {
         state.isFetchingLogs = false;
     }
 }
+
+export async function fetchMoreDetailInfo(ecids) {
+    try {
+        const response = await fetch(`${state.API_BASE}/api/detail_info`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ecids, more_info: true })
+        });
+        const data = await response.json();
+        return data || {};
+    } catch (error) {
+        console.error('Error fetching more detail info:', error);
+        throw error;
+    }
+}

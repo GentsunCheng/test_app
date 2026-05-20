@@ -1,5 +1,5 @@
 import { state, saveHosts, updateAPI } from './store.js';
-import { elements, showToast, stopLogs, closeMethodModal, closeModal, addScriptEntry, validateScriptEntry } from './utils.js';
+import { elements, showToast, stopLogs, closeMethodModal, closeModal, addScriptEntry, validateScriptEntry, closeMoreDetailInfo, showMoreDetailInfo } from './utils.js';
 import { checkHostAvailability, fetchUnits, fetchScriptInfo, addScript, runTest, scanTestScript } from './services.js';
 import { 
     renderHostList, 
@@ -303,4 +303,73 @@ export function initEventListeners() {
             if (!name && !path) entry.remove();
         });
     };
+
+    // Detail Info Modal
+    elements.btnDetailInfoClose.onclick = closeMoreDetailInfo;
+    elements.detailInfoModalOverlay.onclick = (e) => {
+        if (e.target === elements.detailInfoModalOverlay) {
+            closeMoreDetailInfo();
+        }
+    };
+
+    // Spacebar: long press = show immediately on press, close on release; short press = toggle
+    // Also prevent default space scrolling on the unit list element
+    elements.unitListContainer.addEventListener('keydown', (e) => {
+        if (e.key === ' ' || e.code === 'Space') {
+            e.preventDefault();
+        }
+    });
+
+    let spaceTimer = null;
+    let spaceLongPress = false;
+    let wasModalOpenBeforePress = false;
+    const SPACE_LONG_PRESS_MS = 750;
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === ' ' || e.code === 'Space') {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+            if (state.selectedIds.size === 0) return;
+            if (spaceTimer !== null) return;
+
+            e.preventDefault();
+
+            wasModalOpenBeforePress = elements.detailInfoModalOverlay.style.display === 'flex';
+            spaceLongPress = false;
+
+            if (!wasModalOpenBeforePress) {
+                showMoreDetailInfo();
+            }
+
+            spaceTimer = setTimeout(() => {
+                spaceLongPress = true;
+                spaceTimer = null;
+            }, SPACE_LONG_PRESS_MS);
+        }
+    });
+
+    document.addEventListener('keyup', (e) => {
+        if (e.key === ' ' || e.code === 'Space') {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+
+            e.preventDefault();
+
+            if (spaceTimer !== null) {
+                clearTimeout(spaceTimer);
+                spaceTimer = null;
+            }
+
+            if (spaceLongPress) {
+                closeMoreDetailInfo();
+            } else if (wasModalOpenBeforePress) {
+                closeMoreDetailInfo();
+            }
+        }
+    });
+
+    // ESC to close detail info modal
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && elements.detailInfoModalOverlay.style.display === 'flex') {
+            closeMoreDetailInfo();
+        }
+    });
 }
