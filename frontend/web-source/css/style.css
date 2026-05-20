@@ -84,6 +84,11 @@ body, html {
     outline: none;
 }
 
+.unit-list:focus,
+.unit-list:focus-visible {
+    outline: none;
+}
+
 .control-button-bar {
     padding: 24px;
     background-color: var(--toolbar-bg);
