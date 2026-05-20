@@ -153,6 +153,17 @@ function setupDrainButton() {
     const drainBtn = document.getElementById('btn_drain');
     const drainInput = document.getElementById('drain_power_input');
     if (!drainBtn || !drainInput) return;
+
+    drainInput.oninput = () => {
+        let val = parseInt(drainInput.value);
+        if (isNaN(val)) {
+            drainInput.value = '';
+            return;
+        }
+        if (val < 0) drainInput.value = 0;
+        else if (val > 100) drainInput.value = 100;
+    };
+
     drainBtn.onclick = async () => {
         const ecids = getSelectedNormalEcids();
         if (ecids.length === 0) {
