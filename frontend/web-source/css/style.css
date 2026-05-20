@@ -613,6 +613,14 @@ body, html {
     color: #fff;
 }
 
+.unit.focused {
+    box-shadow: 0 0 0 2px var(--primary-color), 0 4px 12px rgba(0, 122, 255, 0.15);
+}
+
+.unit.selected.focused {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), 0 4px 12px rgba(0, 122, 255, 0.3);
+}
+
 .unit-info {
     display: flex;
     flex-direction: column;

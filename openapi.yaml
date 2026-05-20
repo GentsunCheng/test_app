@@ -59,7 +59,7 @@ paths:
           content:
             application/json:
               example:
-                ["0010441438002936", "0010441438002675", "0010441438002676", "0010441438002677"]
+                ["0010441438002936", "0010441438002675", "0010441438002676", "0010441438002677", "0010441438002678", "0010441438002679"]
 
   /api/testing_ecids:
     get:
@@ -71,7 +71,7 @@ paths:
           content:
             application/json:
               example:
-                ["0010441438002675", "0010441438003321"]
+                ["0010441438002675", "0010441438003321", "0010441438003322", "0010441438003323"]
 
   /api/detail_info:
     post:
@@ -119,10 +119,28 @@ paths:
                   cg_vendor: "SDC"
                   temperature: "42.000000"
                   check_timestamp: 1776196934
-                  config: "2KS2A"
-                  serial_number: "EM6R8FYWZX"
-                  sw_vers: "24A62611c"
+                  config: "2KS2A" 
+                  serial_number: "QM28EFW2NS"
+                  sw_vers: "24A62612h"
                   unit_number: "00276"
+                0010441438002678:
+                  battery: "100"
+                  cg_vendor: "SDC"
+                  temperature: "45.000000"
+                  check_timestamp: 1776196934
+                  config: "1G40AS"
+                  serial_number: "F2029KV7R1"
+                  sw_vers: "24A62611d"
+                  unit_number: "024178"
+                0010441438002679:
+                  battery: "100"
+                  cg_vendor: "LGD"
+                  temperature: "13.000000"
+                  check_timestamp: 1776196934
+                  config: "3PDFCA"
+                  serial_number: "ER6F7TYQZM"
+                  sw_vers: "24A62612f"
+                  unit_number: "025138"
 
 
   /api/logs:

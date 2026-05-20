@@ -11,7 +11,8 @@ export const state = {
     hostAvailability: {}, // { url: boolean | 'checking' }
     allUnits: [], // { id, type: 'normal' | 'testing', detail: null }
     selectedIds: new Set(),
-    lastSelectedIndex: -1,
+    focusId: null,
+    anchorId: null,
     currentView: 'units', // 'units', 'settings', 'logs', 'test', or 'tool'
     scriptInfo: {}, // { script_name: { path, status } }
     logAbortController: null,

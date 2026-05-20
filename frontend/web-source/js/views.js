@@ -110,6 +110,7 @@ export function renderUnits(onUnitClick) {
         currentIds.add(unit.id);
         let unitEl = elementMap.get(unit.id);
         const isSelected = state.selectedIds.has(unit.id);
+        const isFocused = state.focusId === unit.id;
         
         const getBatteryHtml = (level) => {
             let batteryClass = level <= 20 ? 'battery-low' : (level <= 50 ? 'battery-mid' : 'battery-high');
@@ -168,7 +169,8 @@ export function renderUnits(onUnitClick) {
             if (!state.selectedIds.has(unit.id)) {
                 state.selectedIds.clear();
                 state.selectedIds.add(unit.id);
-                state.lastSelectedIndex = index;
+                state.anchorId = unit.id;
+                state.focusId = unit.id;
                 renderUnits(onUnitClick);
             }
 
@@ -278,7 +280,7 @@ export function renderUnits(onUnitClick) {
             menu.classList.add('visible');
         };
 
-        const currentClassName = `unit ${isSelected ? 'selected' : ''}`;
+        const currentClassName = `unit ${isSelected ? 'selected' : ''} ${isFocused ? 'focused' : ''}`;
         if (unitEl.className !== currentClassName) unitEl.className = currentClassName;
         unitEl.dataset.index = index;
 

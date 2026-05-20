@@ -12,23 +12,48 @@ import {
 } from './views.js';
 import { hideToolView } from './tool.js';
 
+function getUnitIndex(id) {
+    return state.allUnits.findIndex(u => u.id === id);
+}
+
+function selectRange(fromId, toId) {
+    const fromIdx = getUnitIndex(fromId);
+    const toIdx = getUnitIndex(toId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const start = Math.min(fromIdx, toIdx);
+    const end = Math.max(fromIdx, toIdx);
+    for (let i = start; i <= end; i++) {
+        state.selectedIds.add(state.allUnits[i].id);
+    }
+}
+
 export function handleUnitClick(e, unit) {
     stopLogs();
-    const index = state.allUnits.findIndex(u => u.id === unit.id);
-    
-    if (e.ctrlKey || e.metaKey) {
-        if (state.selectedIds.has(unit.id)) state.selectedIds.delete(unit.id);
-        else state.selectedIds.add(unit.id);
-    } else if (e.shiftKey && state.lastSelectedIndex !== -1) {
-        const start = Math.min(state.lastSelectedIndex, index);
-        const end = Math.max(state.lastSelectedIndex, index);
-        state.selectedIds.clear();
-        for (let i = start; i <= end; i++) state.selectedIds.add(state.allUnits[i].id);
+    const ctrl = e.ctrlKey || e.metaKey;
+    const shift = e.shiftKey;
+
+    if (shift) {
+        if (state.anchorId !== null) {
+            selectRange(state.anchorId, unit.id);
+        } else {
+            state.selectedIds.add(unit.id);
+        }
+        state.focusId = unit.id;
+    } else if (ctrl) {
+        if (state.selectedIds.has(unit.id)) {
+            state.selectedIds.delete(unit.id);
+        } else {
+            state.selectedIds.add(unit.id);
+        }
+        state.anchorId = unit.id;
+        state.focusId = unit.id;
     } else {
         state.selectedIds.clear();
         state.selectedIds.add(unit.id);
+        state.anchorId = unit.id;
+        state.focusId = unit.id;
     }
-    state.lastSelectedIndex = index;
+
     renderUnits(handleUnitClick);
     updateMainView();
 }
@@ -99,7 +124,8 @@ export function initEventListeners() {
     elements.unitListContainer.onclick = (e) => {
         if (e.target === elements.unitListContainer) {
             state.selectedIds.clear();
-            state.lastSelectedIndex = -1;
+            state.focusId = null;
+            state.anchorId = null;
             renderUnits(handleUnitClick);
             updateMainView();
         }
@@ -109,7 +135,11 @@ export function initEventListeners() {
         if ((e.metaKey || e.ctrlKey) && (e.key === 'a' || e.key === 'A')) {
             e.preventDefault();
             state.allUnits.forEach(unit => state.selectedIds.add(unit.id));
-            state.lastSelectedIndex = state.allUnits.length - 1;
+            if (state.allUnits.length > 0) {
+                const lastUnit = state.allUnits[state.allUnits.length - 1];
+                state.anchorId = lastUnit.id;
+                state.focusId = lastUnit.id;
+            }
             renderUnits(handleUnitClick);
             updateMainView();
         }
