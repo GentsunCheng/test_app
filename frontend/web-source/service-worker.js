@@ -1,10 +1,12 @@
-const CACHE_NAME = 'coex-system-cache-v2605d';
+const CACHE_NAME = 'coex-system-cache-v2605e';
 const FILES_TO_CACHE = [
   '/',
   '/index.html',
   '/css/style.css',
   '/js/main.js',
   '/js/controller.js',
+  '/js/detailCache.js',
+  '/js/tool.js',
   '/js/services.js',
   '/js/store.js',
   '/js/utils.js',

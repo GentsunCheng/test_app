@@ -1659,7 +1659,7 @@ body, html {
 
 .detail-info-empty {
     text-align: center;
-    padding: 40px;
+    padding: 20px;
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: 12px;
 }
