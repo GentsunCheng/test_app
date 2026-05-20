@@ -81,6 +81,7 @@ body, html {
     flex-grow: 1;
     overflow-y: auto;
     padding: 20px;
+    outline: none;
 }
 
 .control-button-bar {
