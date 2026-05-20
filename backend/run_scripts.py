@@ -8,6 +8,7 @@ import signal
 import logging
 import datetime
 import zipfile
+import tempfile
 import openpyxl
 import openpyxl.utils
 import openpyxl.styles
@@ -18,8 +19,14 @@ from pathlib import Path
 from collections import deque
 from itertools import zip_longest
 from typing import Tuple, List, Dict, Any
+from types import MappingProxyType
 
 __IS_ALIVE__ = True
+
+__SPECIAL_CMD__ = MappingProxyType({
+    "results": ["python3", "host_ssh_script.py", "--results"],
+    "brownout": ["python3", "host_ssh_script.py", "--test", "brownout", "--serial_test"]
+})
 
 
 def signal_handler(_sig, _frame):
@@ -85,12 +92,8 @@ def scan_local_script() -> Dict:
 
 def __get_cmd__(test_method: str, ecid: str) -> List[str]:
     test_method_split = test_method.split()
-    __COMMON_CMD__ = ["python3", "host_ssh_script.py", "--ecid", ecid, "--test"]
-    __COMMON_CMD__.extend(test_method_split)
-    __SPECIAL_CMD__ = {
-        "results": ["python3", "host_ssh_script.py", "--results", "--ecid", ecid]
-    }
-    return __SPECIAL_CMD__.get(test_method, __COMMON_CMD__)
+    __COMMON_CMD__ = ["python3", "host_ssh_script.py", "--test", test_method_split]
+    return __SPECIAL_CMD__.get(test_method, __COMMON_CMD__) + ["--ecid", ecid]
 
 
 def log_message(base_path: Path, test_method: str, message: str):
@@ -193,6 +196,22 @@ def save_info_to_excel():
             data_row += 1
         wb.save(__INFO_EXCEL_PATH__)
     wb.close()
+
+
+def is_json_file_valid(file_path: str | Path) -> bool:
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            json.load(file)
+        return True
+    except json.JSONDecodeError as e:
+        print(f"JSON format error: {e}")
+        return False
+    except FileNotFoundError:
+        print("cannot find json file")
+        return False
+    except Exception as e:
+        print(f"Unknown error: {e}")
+        return False
 
 
 class TestScript:
@@ -425,15 +444,15 @@ class TestScript:
                 return False, "Space not enough"
         order = -1
         for ecid, data in units.items():
+            order += 1
             info = {ecid: data}
             info[ecid]["test_method"] = test_method
             info[ecid]["script_path"] = self.__script_path__.get(script_name, {}).get("path", "UNDEFINED")
             log_buffer = io.BytesIO()
             thread = threading.Thread(target=self.__run_process__,
                                       args=(test_method, ecid, log_buffer, script_name, info,))
-            thread.start()
-            order += 1
             self.__testing_dict__[ecid] = {
+                "workdir": tempfile.mkdtemp(),
                 "order": order,
                 "log_stream": log_buffer,
                 "thread": thread,
@@ -444,7 +463,20 @@ class TestScript:
                     "test_method": test_method
                 }
             }
+            thread.start()
         return True, "OK"
+
+    def terminate_script(self, units: list[str]) -> Tuple[bool, list[str]]:
+        success_ecid = []
+        for ecid in units:
+            process = self.__testing_dict__.get(ecid, {}).get("process", None)
+            if isinstance(process, sp.Popen):
+                process.terminate()
+                success_ecid.append(ecid)
+        if len(success_ecid) == len(units):
+            return True, success_ecid
+        else:
+            return False, success_ecid
 
     def __adjust_space__(self) -> bool:
         retain_scale = 0.5
@@ -494,11 +526,14 @@ class TestScript:
             return False
         if not self.__script_path__[script_name]["status"]:
             return False
-        workdir = self.__script_path__[script_name]["path"]
+        script_dir = self.__script_path__[script_name]["path"]
         methods = self.__script_path__[script_name]["methods"]
         script_name_str = text2art(script_name)
+        workdir = self.__testing_dict__.get(ecid, {}).get("workdir", script_dir)
+        order = self.__testing_dict__.get(ecid, {}).get("order", 0)
         log_buffer.write(script_name_str.encode("utf-8"))
-        log_buffer.write(f"{workdir}\n".encode("utf-8"))
+        log_buffer.write(f"Script path: {script_dir}\n".encode("utf-8"))
+        log_buffer.write(f"Workdir: {workdir}\n".encode("utf-8"))
         log_buffer.write(b"================")
         log_buffer.write(b"================")
         log_buffer.write(b"================")
@@ -513,7 +548,15 @@ class TestScript:
         cmd = __get_cmd__(test_method, ecid)
         if not cmd:
             return False
-        order = self.__testing_dict__.get(ecid, {}).get("order", 0)
+        if str(workdir) != str(script_dir) and test_method not in __SPECIAL_CMD__.keys():
+            shutil.copytree(
+                script_dir,
+                workdir,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns('.DS_Store', 'TestApp', 'README.md')
+            )
+        else:
+            workdir = script_dir
         time.sleep(abs(order * 0.15))
         process = sp.Popen(
             cmd,
@@ -548,10 +591,6 @@ class TestScript:
                         isinstance(test_method, str),
                         isinstance(log_stream, io.BytesIO) or isinstance(log_stream, io.StringIO)]):
                     if not thread.is_alive():
-                        if log_level == "info":
-                            log_str = log_stream.getvalue().decode('utf-8', errors='ignore')
-                            log_message(self.__base_path__, test_method, log_str)
-                        log_stream.close()
                         __removable_ecids__.append(ecid)
                 else:
                     __removable_ecids__.append(ecid)
@@ -565,6 +604,16 @@ class TestScript:
                     __removable_ecids__.append(ecid)
             __removable_ecids__ = list(set(__removable_ecids__))
             for removable_ecid in __removable_ecids__:
+                log_level = self.__testing_dict__.get(removable_ecid, {}).get("test_status", {}).get("log_level", None)
+                log_stream = self.__testing_dict__.get(removable_ecid, {}).get("log_stream", None)
+                test_method = self.__testing_dict__.get(removable_ecid, {}).get("test_status", {}).get("test_method", None)
+                workdir = self.__testing_dict__.get(removable_ecid, {}).get("workdir", None)
+                if Path(workdir).is_dir():
+                    shutil.rmtree(workdir)
+                if log_level == "info":
+                    log_str = log_stream.getvalue().decode('utf-8', errors='ignore')
+                    log_message(self.__base_path__, test_method, log_str)
+                log_stream.close()
                 self.__testing_dict__.pop(removable_ecid, None)
                 self.__testing_data_size__.pop(removable_ecid, None)
             time.sleep(0.75)

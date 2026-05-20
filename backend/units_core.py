@@ -366,7 +366,7 @@ class AsyncDetector:
             print(f"SSH execute failed: {e}")
             return True, [""]
 
-    def get_detail_info(self, running_ecids: list[str], ecids=None, force=False) -> dict:
+    def get_detail_info(self, running_ecids: list[str], ecids=None, force=False, more_info=False) -> dict:
         ser_ecids = self.get_ecids(full=True)
         allowed_ser_ecids = {ecid: data for ecid, data in ser_ecids.items() if ecid not in running_ecids}
         if force:

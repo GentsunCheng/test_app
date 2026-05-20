@@ -63,7 +63,7 @@ class Management:
 
         @self.app.route('/api/preload', methods=['GET'])
         def preload():
-            self.units_detector.get_detail_info(self.test_scripts.get_testing_ecids(), None)
+            self.units_detector.get_detail_info(self.test_scripts.get_testing_ecids(), ecids=None, more_info=True)
             return jsonify({"status": "success"}), 200
 
         @self.app.route('/api/ecids', methods=['GET'])
@@ -78,7 +78,11 @@ class Management:
         def get_detail_info():
             json_data = request.get_json()
             ecids = json_data.get('ecids', None)
-            return jsonify(self.units_detector.get_detail_info(self.test_scripts.get_testing_ecids(), ecids)), 200
+            more_info = json_data.get('more_info', False)
+            return jsonify(self.units_detector.get_detail_info(
+                self.test_scripts.get_testing_ecids(),
+                ecids=ecids, more_info=more_info)
+            ), 200
 
         @self.app.route('/api/logs', methods=['POST'])
         def stream_logs():
@@ -158,6 +162,19 @@ class Management:
                 return jsonify({'status': 'success', 'removed script': msg_text}), 200
             else:
                 return jsonify({'status': 'error', 'message': msg}), 400
+
+        @self.app.route('/api/force_quit', methods=['POST'])
+        def force_quit():
+            data = request.get_json()
+            if not data:
+                return jsonify({'status': 'error', 'message': 'No data provided'}), 400
+            units = data.get('units')
+            if not units:
+                return jsonify({'status': 'error', 'message': 'No units provided'}), 400
+            result, success_ecid = self.test_scripts.terminate_script(units)
+            if not result:
+                return jsonify(success_ecid), 400
+            return jsonify(success_ecid), 200
 
         @self.app.route('/api/run_test_script', methods=['POST'])
         def run_test_script():
