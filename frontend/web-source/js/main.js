@@ -1,6 +1,6 @@
 import { state } from './store.js';
 import { getRefreshRates } from './utils.js';
-import { fetchUnits, fetchScriptInfo } from './services.js';
+import { fetchUnits, fetchScriptInfo, checkHostAvailability } from './services.js';
 import { updateHostDisplay, renderUnits, updateMainView, renderSettingsView, renderTestView } from './views.js';
 import { initEventListeners, handleUnitClick } from './controller.js';
 import { refreshAllTTLs } from './detailCache.js';
@@ -37,6 +37,11 @@ document.addEventListener('DOMContentLoaded', () => {
     updateHostDisplay();
     initEventListeners();
     
+    checkHostAvailability(state.currentHost.url).then(available => {
+        state.hostAvailability[state.currentHost.url] = available;
+        updateHostDisplay();
+    });
+
     fetchUnits(() => {
         renderUnits(handleUnitClick);
         updateMainView();

@@ -13,6 +13,13 @@ function truncatePath(path, maxParts = 2) {
 
 export function updateHostDisplay() {
     elements.currentHostNameSpan.textContent = state.currentHost.name;
+    const btn = elements.btnHost;
+    const availability = state.hostAvailability[state.currentHost.url];
+    if (availability === true) {
+        btn.classList.remove('offline');
+    } else {
+        btn.classList.add('offline');
+    }
 }
 
 export function renderHostList(onSwitch, onDelete) {

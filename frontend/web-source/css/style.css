@@ -732,6 +732,16 @@ body, html {
     border-style: solid !important;
 }
 
+.btn-host-switch.offline {
+    border-color: var(--error-color) !important;
+    color: var(--error-color) !important;
+    background-color: rgba(255, 59, 48, 0.05) !important;
+}
+
+.btn-host-switch.offline:hover {
+    background-color: rgba(255, 59, 48, 0.1) !important;
+}
+
 .host-list {
     max-height: 200px;
     overflow-y: auto;

@@ -66,6 +66,7 @@ export async function updateAllHostStatus() {
         renderHostList(onHostSwitch, onHostDelete);
     });
     await Promise.all(checks);
+    updateHostDisplay();
 }
 
 function onHostSwitch(host) {
