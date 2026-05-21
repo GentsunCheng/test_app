@@ -92,7 +92,7 @@ def scan_local_script() -> Dict:
 
 def __get_cmd__(test_method: str, ecid: str) -> List[str]:
     test_method_split = test_method.split()
-    __COMMON_CMD__ = ["python3", "host_ssh_script.py", "--test", test_method_split]
+    __COMMON_CMD__ = ["python3", "host_ssh_script.py", "--test"] + test_method_split
     return __SPECIAL_CMD__.get(test_method, __COMMON_CMD__) + ["--ecid", ecid]
 
 
