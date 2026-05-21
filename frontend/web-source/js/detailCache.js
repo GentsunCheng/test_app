@@ -24,7 +24,7 @@ function stripExcluded(detail) {
             result[key] = detail[key];
         }
     }
-    return result;
+    return Object.keys(result).length > 0 ? result : null;
 }
 
 function areDetailsEqual(a, b) {
@@ -55,6 +55,10 @@ export function setCachedDetail(ecid, detail) {
     const cache = loadCache();
     cache[ecid] = { detail: cacheable, cachedAt: Date.now() };
     saveCache(cache);
+}
+
+export function hasMeaningfulDetail(detail) {
+    return stripExcluded(detail) !== null;
 }
 
 export function hasCachedDetailChanged(ecid, newDetail) {

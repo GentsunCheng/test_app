@@ -136,19 +136,21 @@ export async function fetchDetails(ecids, requestSeq = state.unitsRequestSeq) {
 
         let changed = false;
         state.allUnits.forEach(unit => {
-            if (unit.type === 'normal' && details[unit.id]) {
-                const newDetail = details[unit.id];
-                const oldDetail = unit.detail;
-                const cacheUpdated = updateCachedDetail(unit.id, newDetail);
-                unit.detail = newDetail;
-                if (cacheUpdated) changed = true;
-                else if (!oldDetail) changed = true;
-                else {
-                    for (const key of Object.keys(newDetail)) {
-                        if (newDetail[key] !== oldDetail[key]) {
-                            changed = true;
-                            break;
-                        }
+            if (unit.type !== 'normal') return;
+            const rawDetail = details[unit.id];
+            if (!rawDetail || !hasMeaningfulDetail(rawDetail)) return;
+
+            const newDetail = rawDetail;
+            const oldDetail = unit.detail;
+            const cacheUpdated = updateCachedDetail(unit.id, newDetail);
+            unit.detail = newDetail;
+            if (cacheUpdated) changed = true;
+            else if (!oldDetail) changed = true;
+            else {
+                for (const key of Object.keys(newDetail)) {
+                    if (newDetail[key] !== oldDetail[key]) {
+                        changed = true;
+                        break;
                     }
                 }
             }
