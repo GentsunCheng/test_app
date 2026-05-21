@@ -362,7 +362,7 @@ export function initEventListeners() {
     let spaceTimer = null;
     let spaceLongPress = false;
     let wasModalOpenBeforePress = false;
-    const SPACE_LONG_PRESS_MS = 750;
+    const SPACE_LONG_PRESS_MS = 250;
 
     document.addEventListener('keydown', (e) => {
         if (e.key === ' ' || e.code === 'Space') {
