@@ -897,6 +897,13 @@ body, html {
     align-items: center;
 }
 
+.script-selection-list.list-view .script-selection-item .script-name,
+.script-selection-list.list-view .script-selection-item .script-path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .script-selection-list.grid-view {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -915,6 +922,12 @@ body, html {
     top: 12px;
     right: 12px;
     margin-left: 0;
+}
+
+.script-selection-list.grid-view .script-selection-item .script-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .script-selection-list.grid-view .script-selection-item .script-path {

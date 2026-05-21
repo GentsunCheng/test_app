@@ -14,6 +14,12 @@ function truncatePath(path, maxParts = 2) {
     return head + '/.../' + tail;
 }
 
+function truncateName(name, maxLen = 24) {
+    if (name.length <= maxLen) return name;
+    const keep = Math.floor((maxLen - 3) / 2);
+    return name.slice(0, keep) + '...' + name.slice(-keep);
+}
+
 export function updateHostDisplay() {
     elements.currentHostNameSpan.textContent = state.currentHost.name;
     const btn = elements.btnHost;
@@ -587,7 +593,9 @@ export function renderTestView() {
 
         if (item.className !== currentClassName) item.className = currentClassName;
         item.querySelector('.status-dot').className = `status-dot ${info.status ? 'online' : 'offline'}`;
-        item.querySelector('.script-name').textContent = name;
+        const nameEl = item.querySelector('.script-name');
+        nameEl.textContent = state.scriptViewMode === 'grid' ? truncateName(name) : name;
+        nameEl.title = name;
         const pathEl = item.querySelector('.script-path');
         if (state.scriptViewMode === 'grid') {
             pathEl.textContent = truncatePath(info.path);
