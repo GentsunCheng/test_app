@@ -23,8 +23,8 @@ async function fetchAvailableCommands() {
         if (Array.isArray(data)) {
             AVAILABLE_COMMANDS.length = 0;
             AVAILABLE_COMMANDS.push(...data);
-            if (!AVAILABLE_COMMANDS.includes('drain')) {
-                AVAILABLE_COMMANDS.push('drain');
+            if (!AVAILABLE_COMMANDS.includes('discharge')) {
+                AVAILABLE_COMMANDS.push('discharge');
             }
         }
     } catch (error) {
@@ -55,7 +55,7 @@ export async function renderToolView() {
     if (!toolState._initialized) {
         await fetchAvailableCommands();
         setupCmdButtons();
-        setupDrainButton();
+        setupdischargeButton();
         setupLoopListDragDrop();
         setupLoopToggle();
         toolState._initialized = true;
@@ -85,21 +85,21 @@ async function sendCmd(ecids, cmd) {
             body: JSON.stringify({ ecids, cmd })
         });
         const result = await response.json();
-        return { success: result.status === 'success', message: result.cmd || result.drain_result || '' };
+        return { success: result.status === 'success', message: result.cmd || result.discharge_result || '' };
     } catch (error) {
         return { success: false, message: error.message };
     }
 }
 
-async function sendDrain(ecids, targetPower) {
+async function senddischarge(ecids, targetPower) {
     try {
-        const response = await fetch(`${state.API_BASE}/api/drain_battery`, {
+        const response = await fetch(`${state.API_BASE}/api/discharge_battery`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ecids, target_power: targetPower })
         });
         const result = await response.json();
-        return { success: result.status === 'success', message: result.drain_result || '' };
+        return { success: result.status === 'success', message: result.discharge_result || '' };
     } catch (error) {
         return { success: false, message: error.message };
     }
@@ -112,7 +112,7 @@ function setupCmdButtons() {
     cmdContainer.querySelectorAll('.cmd-btn[data-cmd]').forEach(btn => btn.remove());
 
     AVAILABLE_COMMANDS.forEach(cmd => {
-        if (cmd === 'drain') return;
+        if (cmd === 'discharge') return;
         const btn = document.createElement('button');
         btn.className = 'cmd-btn';
         btn.dataset.cmd = cmd;
@@ -149,55 +149,55 @@ function setupCmdButtons() {
     });
 }
 
-function setupDrainButton() {
-    const drainBtn = document.getElementById('btn_drain');
-    const drainInput = document.getElementById('drain_power_input');
-    if (!drainBtn || !drainInput) return;
+function setupdischargeButton() {
+    const dischargeBtn = document.getElementById('btn_discharge');
+    const dischargeInput = document.getElementById('discharge_power_input');
+    if (!dischargeBtn || !dischargeInput) return;
 
-    drainInput.oninput = () => {
-        let val = parseInt(drainInput.value);
+    dischargeInput.oninput = () => {
+        let val = parseInt(dischargeInput.value);
         if (isNaN(val)) {
-            drainInput.value = '';
+            dischargeInput.value = '';
             return;
         }
-        if (val < 0) drainInput.value = 0;
-        else if (val > 100) drainInput.value = 100;
+        if (val < 0) dischargeInput.value = 0;
+        else if (val > 100) dischargeInput.value = 100;
     };
 
-    drainInput.addEventListener('wheel', (e) => {
+    dischargeInput.addEventListener('wheel', (e) => {
         e.preventDefault();
-        let val = parseInt(drainInput.value) || 0;
+        let val = parseInt(dischargeInput.value) || 0;
         val += e.deltaY > 0 ? -1 : 1;
         val = Math.max(0, Math.min(100, val));
-        drainInput.value = val;
+        dischargeInput.value = val;
     }, { passive: false });
 
-    drainBtn.onclick = async () => {
+    dischargeBtn.onclick = async () => {
         const ecids = getSelectedNormalEcids();
         if (ecids.length === 0) {
             showToast('No normal units selected', 'error');
             return;
         }
-        const targetPower = parseInt(drainInput.value);
+        const targetPower = parseInt(dischargeInput.value);
         if (isNaN(targetPower) || targetPower < 0 || targetPower > 100) {
             showToast('Please enter a valid power value (0-100)', 'error');
             return;
         }
-        drainBtn.classList.remove('error', 'success');
-        drainBtn.classList.add('sending');
-        drainBtn.disabled = true;
-        const result = await sendDrain(ecids, targetPower);
-        drainBtn.classList.remove('sending');
-        drainBtn.disabled = false;
+        dischargeBtn.classList.remove('error', 'success');
+        dischargeBtn.classList.add('sending');
+        dischargeBtn.disabled = true;
+        const result = await senddischarge(ecids, targetPower);
+        dischargeBtn.classList.remove('sending');
+        dischargeBtn.disabled = false;
         if (result.success) {
-            drainBtn.classList.add('success');
-            showToast(`Drain: ${result.message || 'Success'}`, 'success');
+            dischargeBtn.classList.add('success');
+            showToast(`discharge: ${result.message || 'Success'}`, 'success');
         } else {
-            drainBtn.classList.add('error');
-            showToast(`Drain: ${result.message || 'Failed'}`, 'error');
+            dischargeBtn.classList.add('error');
+            showToast(`discharge: ${result.message || 'Failed'}`, 'error');
         }
         setTimeout(() => {
-            drainBtn.classList.remove('success', 'error');
+            dischargeBtn.classList.remove('success', 'error');
         }, 2000);
     };
 }
@@ -239,11 +239,11 @@ function setupLoopListDragDrop() {
         });
     });
 
-    const drainBtn = document.getElementById('btn_drain');
-    if (drainBtn) {
-        drainBtn.draggable = true;
-        drainBtn.addEventListener('dragstart', (e) => {
-            e.dataTransfer.setData('text/cmd', 'drain');
+    const dischargeBtn = document.getElementById('btn_discharge');
+    if (dischargeBtn) {
+        dischargeBtn.draggable = true;
+        dischargeBtn.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/cmd', 'discharge');
         });
     }
 }
@@ -462,10 +462,10 @@ async function executeLoopCycle() {
         renderLoopResults();
 
         let result;
-        if (cmd === 'drain') {
-            const powerInput = document.getElementById('drain_power_input');
+        if (cmd === 'discharge') {
+            const powerInput = document.getElementById('discharge_power_input');
             const targetPower = powerInput ? parseInt(powerInput.value) || 5 : 5;
-            result = await sendDrain(targetEcids, targetPower);
+            result = await senddischarge(targetEcids, targetPower);
         } else {
             result = await sendCmd(targetEcids, cmd);
         }

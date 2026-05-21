@@ -193,8 +193,8 @@ class Management:
                     return jsonify({'status': 'error', 'message': msg}), 400
             return jsonify({'status': 'success', 'test_method': test_method, 'units': units}), 200
 
-        @self.app.route('/api/drain_battery', methods=['POST'])
-        def drain_battery():
+        @self.app.route('/api/discharge_battery', methods=['POST'])
+        def discharge_battery():
             json_data = request.get_json()
             if not json_data:
                 return jsonify({'status': 'error', 'message': 'No data provided'}), 400
@@ -202,10 +202,10 @@ class Management:
             target_power = json_data.get('target_power')
             if not ecids or not target_power:
                 return jsonify({'status': 'error', 'message': 'No data provided'}), 400
-            drain_result, msg = self.units_detector.drain_battery(ecids, target_power)
-            if not drain_result:
+            discharge_result, msg = self.units_detector.discharge_battery(ecids, target_power)
+            if not discharge_result:
                 return jsonify({'status': 'error', 'message': msg}), 400
-            return jsonify({'status': 'success', 'drain_result': drain_result}), 200
+            return jsonify({'status': 'success', 'discharge_result': discharge_result}), 200
 
         @self.app.route('/api/send_ssh_cmd', methods=['POST'])
         def send_ssh_cmd():

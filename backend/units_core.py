@@ -476,34 +476,34 @@ class UnitServer(AsyncDetector):
         else:
             return False, f"Failed to rsync {source} to {target}"
 
-    def drain_battery(self, ecids: list[str], target_power: int = 5) -> Tuple[bool, str]:
-        drain_resources_file_name = "drain_resources"
+    def discharge_battery(self, ecids: list[str], target_power: int = 5) -> Tuple[bool, str]:
+        discharge_resources_file_name = "discharge_resources"
         ser_ecids = self.get_ecids(full=True)
         self.get_detail_info([], None, True)
         pushed_ecids = []
         success_ecids = []
-        drain_resources = self.__base_path__ / drain_resources_file_name
+        discharge_resources = self.__base_path__ / discharge_resources_file_name
         for ecid in ecids:
             location_id = ser_ecids.get(ecid, {}).get("loc", None)
             if location_id:
                 self.__run_cmd__(
-                    ["copyUnrestricted", "-w", "-u", location_id, "-s", str(drain_resources), "-t", "/var/root"])
+                    ["copyUnrestricted", "-w", "-u", location_id, "-s", str(discharge_resources), "-t", "/var/root"])
                 pushed_ecids.append(ecid)
         for ecid in pushed_ecids:
             port = self.__process_dict__.get(ecid, {}).get("port", None)
             if port:
                 command = (
-                    f'cd /var/root/{drain_resources_file_name} ; '
-                    'chmod +x unit_batterydrain.sh ; '
-                    f'screen -S batterydrain -s /bin/zsh -d -m ./unit_batterydrain.sh {target_power}'
+                    f'cd /var/root/{discharge_resources_file_name} ; '
+                    'chmod +x unit_batterydischarge.sh ; '
+                    f'screen -S batterydischarge -s /bin/zsh -d -m ./unit_batterydischarge.sh {target_power}'
                 )
                 self.__remote_ssh_cmd__(port, command, output=False)
                 success_ecids.append(ecid)
         if len(ecids) == len(success_ecids):
-            return True, "Start draining battery"
+            return True, "Start discharging battery"
         else:
             failed_units = ", ".join([ecid for ecid in ecids if ecid not in success_ecids])
-            return False, f"Failed to start draining battery: {failed_units}"
+            return False, f"Failed to start discharging battery: {failed_units}"
 
     def cmd_tools(self, ecids: list[str],
                   cmd: CmdTool) -> Tuple[bool, str]:

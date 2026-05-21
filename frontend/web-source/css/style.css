@@ -1289,7 +1289,7 @@ body, html {
     border-color: var(--success-color);
 }
 
-.battery-drain {
+.battery-discharge {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -1300,7 +1300,7 @@ body, html {
     box-shadow: var(--shadow-sm);
 }
 
-.drain-input {
+.discharge-input {
     width: 80px;
     padding: 8px 12px;
     border: 1px solid var(--border-color);
@@ -1310,13 +1310,13 @@ body, html {
     transition: all var(--transition-fast);
 }
 
-.drain-input:focus {
+.discharge-input:focus {
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
 }
 
-.drain-btn {
+.discharge-btn {
     min-width: 80px;
 }
 
