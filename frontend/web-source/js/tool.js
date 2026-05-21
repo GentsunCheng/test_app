@@ -164,6 +164,14 @@ function setupDrainButton() {
         else if (val > 100) drainInput.value = 100;
     };
 
+    drainInput.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        let val = parseInt(drainInput.value) || 0;
+        val += e.deltaY > 0 ? -1 : 1;
+        val = Math.max(0, Math.min(100, val));
+        drainInput.value = val;
+    }, { passive: false });
+
     drainBtn.onclick = async () => {
         const ecids = getSelectedNormalEcids();
         if (ecids.length === 0) {
