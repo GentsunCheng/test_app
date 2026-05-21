@@ -697,6 +697,7 @@ export function renderMethodModal(scriptName, methods) {
     state.currentScriptForMethod = scriptName;
     state.allMethodsForCurrentScript = methods;
     state.selectedMethod = null;
+    state.methodFocusIndex = -1;
     elements.methodModalTitle.textContent = `Select Method for ${scriptName}`;
     elements.btnMethodConfirm.disabled = true;
     elements.methodSearchInput.value = '';
@@ -726,15 +727,23 @@ export function filterMethods() {
 
     if (filteredMethods.length === 0) {
         elements.methodListContainer.innerHTML = '<div id="no_methods_msg" style="padding: 20px; text-align: center; color: var(--text-secondary);">No methods found.</div>';
+        state.methodFocusIndex = -1;
     } else {
         const msg = document.getElementById('no_methods_msg');
         if (msg) msg.remove();
+        if (state.methodFocusIndex >= filteredMethods.length) state.methodFocusIndex = 0;
+        if (state.methodFocusIndex < 0 && state.selectedMethod) {
+            const idx = filteredMethods.indexOf(state.selectedMethod);
+            state.methodFocusIndex = idx >= 0 ? idx : 0;
+        }
+
         const currentMethods = new Set();
         filteredMethods.forEach((method, index) => {
             currentMethods.add(method);
             let item = elementMap.get(method);
             const isSelected = state.selectedMethod === method;
-            const currentClassName = `method-item ${isSelected ? 'selected' : ''}`;
+            const isFocused = index === state.methodFocusIndex;
+            const currentClassName = `method-item ${isSelected ? 'selected' : ''} ${isFocused ? 'focused' : ''}`;
 
             if (!item) {
                 item = document.createElement('div');
@@ -742,11 +751,10 @@ export function filterMethods() {
                 item.dataset.method = method;
                 item.textContent = method;
                 item.onclick = () => {
-                    const prev = elements.methodListContainer.querySelector('.method-item.selected');
-                    if (prev) prev.classList.remove('selected');
-                    item.classList.add('selected');
                     state.selectedMethod = method;
+                    state.methodFocusIndex = index;
                     elements.btnMethodConfirm.disabled = false;
+                    filterMethods();
                 };
                 elements.methodListContainer.appendChild(item);
             }
@@ -756,6 +764,9 @@ export function filterMethods() {
         existingElements.forEach(el => {
             if (!currentMethods.has(el.dataset.method)) el.remove();
         });
+
+        const focusedEl = elements.methodListContainer.querySelector('.method-item.focused');
+        if (focusedEl) focusedEl.scrollIntoView({ block: 'nearest' });
     }
 }
 

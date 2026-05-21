@@ -187,7 +187,45 @@ export function initEventListeners() {
     };
 
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && elements.methodModalOverlay.style.display === 'flex' && !elements.btnMethodConfirm.disabled && document.activeElement !== elements.methodSearchInput) {
+        const isMethodModalOpen = elements.methodModalOverlay.style.display === 'flex';
+        if (!isMethodModalOpen) return;
+
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            if (document.activeElement === elements.methodSearchInput) return;
+            const now = Date.now();
+            if (state._lastArrowTime && now - state._lastArrowTime < 100) return;
+            state._lastArrowTime = now;
+            e.preventDefault();
+            const items = elements.methodListContainer.querySelectorAll('.method-item');
+            if (items.length === 0) return;
+
+            const delta = e.key === 'ArrowDown' ? 1 : -1;
+            let newIndex = state.methodFocusIndex + delta;
+            if (newIndex < 0) newIndex = 0;
+            if (newIndex >= items.length) newIndex = items.length - 1;
+            if (newIndex === state.methodFocusIndex) return;
+
+            state.methodFocusIndex = newIndex;
+            const targetMethod = items[newIndex].dataset.method;
+            state.selectedMethod = targetMethod;
+            elements.btnMethodConfirm.disabled = false;
+            filterMethods();
+        }
+
+        if (e.key === 'Home' || e.key === 'End') {
+            if (document.activeElement === elements.methodSearchInput) return;
+            e.preventDefault();
+            const items = elements.methodListContainer.querySelectorAll('.method-item');
+            if (items.length === 0) return;
+
+            const newIndex = e.key === 'Home' ? 0 : items.length - 1;
+            state.methodFocusIndex = newIndex;
+            state.selectedMethod = items[newIndex].dataset.method;
+            elements.btnMethodConfirm.disabled = false;
+            filterMethods();
+        }
+
+        if (e.key === 'Enter' && !elements.btnMethodConfirm.disabled && document.activeElement !== elements.methodSearchInput) {
             e.preventDefault();
             elements.btnMethodConfirm.click();
         }

@@ -20,6 +20,7 @@ export const state = {
     selectedMethod: null,
     currentScriptForMethod: null,
     allMethodsForCurrentScript: [],
+    methodFocusIndex: -1,
     isSearchRegex: false,
     isSearchCaseSensitive: false,
     isUnitSearchRegex: false,
@@ -32,7 +33,8 @@ export const state = {
     scriptsInterval: null,
     missingNormalUnitSince: new Map(), // { ecid -> timestamp when first missing from both lists }
     unitsRequestSeq: 0,
-    scriptViewMode: localStorage.getItem('scriptViewMode') || 'list'
+    scriptViewMode: localStorage.getItem('scriptViewMode') || 'list',
+    _lastArrowTime: 0
 };
 
 // Initialize currentHost and API_BASE

@@ -1009,6 +1009,12 @@ body, html {
     box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
 }
 
+.method-item.focused:not(.selected) {
+    background-color: rgba(0, 122, 255, 0.08);
+    border-color: var(--primary-color);
+    box-shadow: inset 0 0 0 1.5px var(--primary-color);
+}
+
 .method-item:active {
     transform: scale(0.98);
 }
