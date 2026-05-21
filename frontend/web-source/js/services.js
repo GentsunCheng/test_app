@@ -111,6 +111,11 @@ export async function fetchUnits(renderCallback) {
             });
         }
 
+        if (state.hostAvailability[state.currentHost.url] !== true) {
+            state.hostAvailability[state.currentHost.url] = true;
+            window.dispatchEvent(new CustomEvent('hostavailabilitychange'));
+        }
+
         if (renderCallback) renderCallback();
 
         if (normalToFetchDetails.length > 0) {
@@ -119,6 +124,10 @@ export async function fetchUnits(renderCallback) {
         }
     } catch (error) {
         console.error('Error fetching units:', error);
+        if (state.hostAvailability[state.currentHost.url] !== false) {
+            state.hostAvailability[state.currentHost.url] = false;
+            window.dispatchEvent(new CustomEvent('hostavailabilitychange'));
+        }
     }
 }
 

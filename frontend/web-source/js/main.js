@@ -42,6 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateHostDisplay();
     });
 
+    window.addEventListener('hostavailabilitychange', updateHostDisplay);
+
     fetchUnits(() => {
         renderUnits(handleUnitClick);
         updateMainView();
