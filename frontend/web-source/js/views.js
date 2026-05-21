@@ -1,7 +1,10 @@
 import { state } from './store.js';
-import { elements, showToast, stopLogs, openModal, closeModal, closeMethodModal, clearLogs, showConfirmDialog, showMoreDetailInfo } from './utils.js';
+import { elements, showToast, stopLogs, openModal, closeModal, closeMethodModal, showConfirmDialog, showMoreDetailInfo } from './utils.js';
 import { fetchScriptInfo, deleteScript, cleanDisabledScripts, fetchMethods, startLogStream } from './services.js';
 import { renderToolView, refreshToolResults } from './tool.js';
+import { LogVirtualScroller } from './logScroller.js';
+
+let logScroller = null;
 
 function truncatePath(path, maxParts = 2) {
     const parts = path.split('/');
@@ -852,7 +855,34 @@ export function renderSelectedUnitsTable() {
     }
 }
 
+function saveLogs() {
+    if (!logScroller) return;
+    const text = logScroller.getAllText();
+    if (!text) {
+        showToast('No logs to save', 'info');
+        return;
+    }
+    const now = new Date();
+    const yymmdd = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+    const hhmmss = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+    const filename = `Coex_test_${yymmdd}-${hhmmss}.log`;
+    const blob = new Blob([text], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+    showToast(`Saved: ${filename}`, 'success');
+}
+
 export function renderLogView() {
+    if (logScroller) {
+        logScroller.destroy();
+        logScroller = null;
+    }
+
     startLogStream(
         (count) => {
             elements.mainContent.innerHTML = `
@@ -863,51 +893,22 @@ export function renderLogView() {
                         <button class="btn-clear-log" id="btn_clear_log">Clear</button>
                     </div>
                 </div>
-                <div id="log_output" class="log-container">${count > 0 ? 'Connecting...' : 'No units selected.'}</div>
+                <div id="log_output" class="log-container">${count > 0 ? '' : 'No units selected.'}</div>
             `;
-            const clearBtn = document.getElementById('btn_clear_log');
-            if (clearBtn) clearBtn.onclick = clearLogs;
-            const saveBtn = document.getElementById('btn_save_log');
-            if (saveBtn) {
-                saveBtn.onclick = () => {
-                    const logOutput = document.getElementById('log_output');
-                    if (!logOutput) return;
-                    const entries = logOutput.querySelectorAll('.log-entry');
-                    const text = Array.from(entries).map(el => el.textContent).join('\n');
-                    if (!text) {
-                        showToast('No logs to save', 'info');
-                        return;
-                    }
-                    const now = new Date();
-                    const yymmdd = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-                    const hhmmss = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
-                    const filename = `Coex_test_${yymmdd}-${hhmmss}.log`;
-                    const blob = new Blob([text], { type: 'text/plain' });
-                    const a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(a.href);
-                    showToast(`Saved: ${filename}`, 'success');
-                };
-            }
+
+            const logOutput = document.getElementById('log_output');
+            if (!logOutput || count === 0) return;
+
+            logScroller = new LogVirtualScroller(logOutput);
+
+            document.getElementById('btn_clear_log').onclick = () => {
+                if (logScroller) logScroller.clear();
+            };
+            document.getElementById('btn_save_log').onclick = saveLogs;
         },
         (line, isError) => {
-            const logOutput = document.getElementById('log_output');
-            if (!logOutput) return;
-            if (logOutput.textContent === 'Connecting...') logOutput.innerHTML = '';
-            
-            if (!line) return;
-            
-            const isAtBottom = logOutput.scrollHeight - logOutput.scrollTop <= logOutput.clientHeight + 25;
-            const entry = document.createElement('div');
-            entry.className = 'log-entry';
-            if (isError) entry.style.color = '#ff4d4f';
-            entry.textContent = line;
-            logOutput.appendChild(entry);
-            if (isAtBottom) logOutput.scrollTop = logOutput.scrollHeight;
+            if (!line || !logScroller) return;
+            logScroller.push(line, !!isError);
         }
     );
 }

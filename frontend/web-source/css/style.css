@@ -686,6 +686,10 @@ body, html {
     margin-bottom: 4px;
 }
 
+.log-vs-viewport {
+    padding: 24px;
+}
+
 .log-header {
     display: flex;
     justify-content: space-between;

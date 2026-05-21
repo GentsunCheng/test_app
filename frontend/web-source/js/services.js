@@ -1,6 +1,6 @@
 import { state } from './store.js';
 import { showToast, stopLogs } from './utils.js';
-import { getCachedDetail, updateCachedDetail } from './detailCache.js';
+import { getCachedDetail, updateCachedDetail, hasMeaningfulDetail } from './detailCache.js';
 
 const NORMAL_UNIT_REMOVAL_GRACE_MS = 300;
 
