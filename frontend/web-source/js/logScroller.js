@@ -55,8 +55,8 @@ export class LogVirtualScroller {
         this._updateSpacer();
 
         if (wasAtBottom) {
-            this._render();
             this.container.scrollTop = this.container.scrollHeight;
+            this._render();
         } else {
             const range = this._getVisibleRange();
             if (idx >= range.start && idx < range.end) {
@@ -177,10 +177,13 @@ export class LogVirtualScroller {
 
         if (changed) {
             this._updateSpacer();
+            this._lastStart = -1;
+            this._lastEnd = -1;
             const newRange = this._getVisibleRange();
-            if (newRange.start !== this._lastStart || newRange.end !== this._lastEnd) {
-                this._lastStart = -1;
-                this._render();
+            const newTop = newRange.start > 0 ? this._positions[newRange.start] : 0;
+            this._viewport.style.transform = `translateY(${newTop}px)`;
+            if (this._isAtBottom()) {
+                this.container.scrollTop = this.container.scrollHeight;
             }
         }
     }

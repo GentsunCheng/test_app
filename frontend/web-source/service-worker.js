@@ -1,4 +1,4 @@
-const CACHE_NAME = 'coex-system-cache-v2605f';
+const CACHE_NAME = 'coex-system-cache-v2605g';
 const FILES_TO_CACHE = [
   '/',
   '/index.html',
