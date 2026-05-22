@@ -54,7 +54,9 @@ __CMD_MAP__ = MappingProxyType({
         "rm -rf /var/mobile/Media/FactoryLogs/LogCollector/MMI",
         "rm -rf /var/mobile/Media/FactoryLogs/LogCollector/Wingsuit",
         "diagstool bootargs -r serial-device=0x00000083",
-        "diagstool bootargs -r astro"
+        "diagstool bootargs -r astro",
+        "powerswitch lcd on",
+        "SignageTool set -text 'renew complete' -textSize 100 -textColor black -backgroundColor white",
     )
 })
 
