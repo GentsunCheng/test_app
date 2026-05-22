@@ -202,9 +202,11 @@ export function closeModal() {
     elements.modalOverlay.style.display = 'none';
 }
 
-export function addScriptEntry(name, path) {
+export function addScriptEntry(name, path, selected = true) {
     const entry = document.createElement('div');
     entry.className = 'script-entry';
+    if (selected) entry.classList.add('selected');
+    entry.dataset.selected = String(selected);
 
     const nameField = document.createElement('div');
     nameField.className = 'entry-field';
@@ -234,7 +236,8 @@ export function addScriptEntry(name, path) {
     removeBtn.className = 'btn-remove-entry';
     removeBtn.textContent = '×';
     removeBtn.title = 'Remove';
-    removeBtn.onclick = () => {
+    removeBtn.onclick = (e) => {
+        e.stopPropagation();
         if (elements.scriptEntryList.children.length > 1) {
             entry.remove();
         } else {
@@ -247,6 +250,18 @@ export function addScriptEntry(name, path) {
     entry.appendChild(nameField);
     entry.appendChild(pathField);
     entry.appendChild(removeBtn);
+
+    entry.addEventListener('click', (e) => {
+        if (e.target.closest('.btn-remove-entry')) return;
+        const isSelected = entry.dataset.selected === 'true';
+        if (isSelected) {
+            entry.dataset.selected = 'false';
+            entry.classList.remove('selected');
+        } else {
+            entry.dataset.selected = 'true';
+            entry.classList.add('selected');
+        }
+    });
 
     const onInput = () => validateScriptEntry(entry);
     nameInput.oninput = onInput;

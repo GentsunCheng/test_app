@@ -421,6 +421,10 @@ body, html {
     transition: all var(--transition-fast);
 }
 
+.script-entry.selected input {
+    border-color: var(--primary-color);
+}
+
 .script-entry input:focus {
     outline: none;
     border-color: var(--primary-color);

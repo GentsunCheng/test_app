@@ -314,7 +314,7 @@ export function initEventListeners() {
             elements.scriptEntryList.innerHTML = '';
             for (const [name, paths] of Object.entries(data)) {
                 for (const path of paths) {
-                    addScriptEntry(name, path);
+                    addScriptEntry(name, path, false);
                 }
             }
             showToast(`Scanned ${Object.keys(data).length} script(s)`, 'success');
