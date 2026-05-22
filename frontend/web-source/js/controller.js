@@ -260,6 +260,7 @@ export function initEventListeners() {
         let allValid = true;
 
         entries.forEach(entry => {
+            if (entry.dataset.selected !== 'true') return;
             if (!validateScriptEntry(entry)) allValid = false;
         });
 
@@ -270,13 +271,14 @@ export function initEventListeners() {
 
         const entryData = [];
         entries.forEach(entry => {
+            if (entry.dataset.selected !== 'true') return;
             const name = entry.querySelector('.script-name-input').value.trim();
             const path = entry.querySelector('.script-path-input').value.trim();
             if (name && path) entryData.push({ name, path });
         });
 
         if (entryData.length === 0) {
-            showToast('Please fill in at least one script name and path.', 'error');
+            showToast('Please select at least one script to add.', 'error');
             return;
         }
 
