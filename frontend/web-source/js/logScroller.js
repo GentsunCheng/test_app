@@ -1,5 +1,5 @@
 const SAMPLE_TEXT = 'M';
-const SCROLL_TOLERANCE = 25;
+const SCROLL_TOLERANCE = 40;
 const DEFAULT_ROW_HEIGHT = 25;
 
 export class LogVirtualScroller {
@@ -55,8 +55,11 @@ export class LogVirtualScroller {
         this._updateSpacer();
 
         if (wasAtBottom) {
-            this.container.scrollTop = this.container.scrollHeight;
+            this._scrollToBottom();
             this._render();
+            if (!this._isAtBottom()) {
+                this._scrollToBottom();
+            }
         } else {
             const range = this._getVisibleRange();
             if (idx >= range.start && idx < range.end) {
@@ -89,7 +92,12 @@ export class LogVirtualScroller {
     }
 
     _isAtBottom() {
-        return this.container.scrollHeight - this.container.scrollTop <= this.container.clientHeight + SCROLL_TOLERANCE;
+        const totalHeight = this.data.length > 0 ? this._positions[this.data.length] : 0;
+        return totalHeight - this.container.scrollTop <= this.container.clientHeight + SCROLL_TOLERANCE;
+    }
+
+    _scrollToBottom() {
+        this.container.scrollTop = this.container.scrollHeight;
     }
 
     _getVisibleRange() {
@@ -183,7 +191,7 @@ export class LogVirtualScroller {
             const newTop = newRange.start > 0 ? this._positions[newRange.start] : 0;
             this._viewport.style.transform = `translateY(${newTop}px)`;
             if (this._isAtBottom()) {
-                this.container.scrollTop = this.container.scrollHeight;
+                this._scrollToBottom();
             }
         }
     }
