@@ -1,6 +1,6 @@
-const SAMPLE_TEXT = 'M';
 const SCROLL_TOLERANCE = 12;
 const DEFAULT_ROW_HEIGHT = 25;
+const MAX_DIRECT_ELEMENTS = 500;
 
 export class LogVirtualScroller {
     constructor(container) {
@@ -13,6 +13,7 @@ export class LogVirtualScroller {
         this._lastStart = -1;
         this._lastEnd = -1;
         this._ticking = false;
+        this._directMode = false;
 
         this._setupDOM();
         this._measureDefaultHeight();
@@ -37,7 +38,7 @@ export class LogVirtualScroller {
     _measureDefaultHeight() {
         const el = document.createElement('div');
         el.className = 'log-entry';
-        el.textContent = SAMPLE_TEXT;
+        el.textContent = 'M';
         el.style.cssText = 'position:absolute;visibility:hidden;left:0;top:0;';
         this.container.appendChild(el);
         const h = el.offsetHeight;
@@ -48,16 +49,35 @@ export class LogVirtualScroller {
     push(text, isError = false) {
         const idx = this.data.length;
         this.data.push({ text, isError });
-        this._cachedHeights[idx] = this._defaultHeight;
-        this._positions[idx + 1] = this._positions[idx] + this._defaultHeight;
 
         const wasAtBottom = this._isAtBottom();
-        this._updateSpacer();
 
         if (wasAtBottom) {
-            this._render();
+            if (this._directMode && this._viewport.children.length >= MAX_DIRECT_ELEMENTS) {
+                this._directMode = false;
+                this._lastStart = -1;
+                this._lastEnd = -1;
+                this._render();
+                this._scrollToBottom();
+            }
+            this._directMode = true;
+            const el = document.createElement('div');
+            el.className = 'log-entry';
+            if (isError) el.style.color = '#ff4d4f';
+            el.textContent = text;
+            this._viewport.appendChild(el);
+
+            const actualH = el.offsetHeight || this._defaultHeight;
+            this._cachedHeights[idx] = actualH;
+            this._positions[idx + 1] = this._positions[idx] + actualH;
+            this._updateSpacer();
+
             this._scrollToBottom();
         } else {
+            this._directMode = false;
+            this._cachedHeights[idx] = this._defaultHeight;
+            this._positions[idx + 1] = this._positions[idx] + this._defaultHeight;
+            this._updateSpacer();
             const range = this._getVisibleRange();
             if (idx >= range.start && idx < range.end) {
                 this._render();
@@ -74,6 +94,7 @@ export class LogVirtualScroller {
         this._viewport.innerHTML = '';
         this._updateSpacer();
         this.container.scrollTop = 0;
+        this._directMode = false;
     }
 
     getAllText() {
@@ -130,6 +151,15 @@ export class LogVirtualScroller {
     }
 
     _onScroll() {
+        if (this._directMode) {
+            if (!this._isAtBottom()) {
+                this._directMode = false;
+                this._lastStart = -1;
+                this._lastEnd = -1;
+                this._render();
+            }
+            return;
+        }
         if (!this._ticking) {
             this._ticking = true;
             requestAnimationFrame(() => {
@@ -181,9 +211,6 @@ export class LogVirtualScroller {
 
         if (changed) {
             this._updateSpacer();
-            const newRange = this._getVisibleRange();
-            const newTop = newRange.start > 0 ? this._positions[newRange.start] : 0;
-            this._viewport.style.transform = `translateY(${newTop}px)`;
         }
     }
 
