@@ -449,8 +449,12 @@ export function renderSettingsView() {
         }
 
         if (row.className !== rowClassName) row.className = rowClassName;
-        row.querySelector('.col-name').textContent = name;
-        row.querySelector('.col-path').textContent = info.path;
+        const nameCell = row.querySelector('.col-name');
+        nameCell.textContent = name;
+        nameCell.title = name;
+        const pathCell = row.querySelector('.col-path');
+        pathCell.textContent = info.path;
+        pathCell.title = info.path;
         row.querySelector('.status-dot').className = `status-dot ${info.status ? 'online' : 'offline'}`;
         row.querySelector('.status-text').textContent = statusText;
         row.querySelector('.btn-delete').onclick = () => deleteScript(name, fetchScriptInfo);

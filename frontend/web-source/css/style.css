@@ -183,6 +183,7 @@ body, html {
 
 .script-table {
     width: 100%;
+    table-layout: fixed;
     border-collapse: separate;
     border-spacing: 0;
     background: #fff;
@@ -191,11 +192,38 @@ body, html {
     box-shadow: var(--shadow-sm);
 }
 
+.script-table thead {
+    display: table;
+    table-layout: fixed;
+    width: 100%;
+}
+
+.script-table tbody {
+    display: table;
+    table-layout: fixed;
+    width: 100%;
+}
+
 .script-table th, .script-table td {
     text-align: left;
     padding: 16px;
     border-bottom: 1px solid var(--border-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
+
+.script-table th:nth-child(1),
+.script-table td:nth-child(1) { width: 22%; }
+
+.script-table th:nth-child(2),
+.script-table td:nth-child(2) { width: 48%; }
+
+.script-table th:nth-child(3),
+.script-table td:nth-child(3) { width: 15%; }
+
+.script-table th:nth-child(4),
+.script-table td:nth-child(4) { width: 15%; }
 
 .script-table th {
     background-color: #fafafa;

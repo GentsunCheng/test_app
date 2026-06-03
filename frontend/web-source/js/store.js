@@ -1,11 +1,38 @@
 // --- State Management ---
 
+const defaultHost = window.location.hostname || 'localhost';
+const defaultHostUrl = `http://${defaultHost}:8196`;
+
+function sanitizeHost(host) {
+    if (!host) return null;
+    try {
+        const url = new URL(host.url);
+        if (!url.hostname) throw new Error('empty hostname');
+    } catch {
+        host.url = defaultHostUrl;
+    }
+    return host;
+}
+
+function loadHosts() {
+    const saved = JSON.parse(localStorage.getItem('hosts'));
+    if (saved && Array.isArray(saved) && saved.length > 0) {
+        saved.forEach(sanitizeHost);
+        return saved;
+    }
+    return [{ name: 'Master', url: defaultHostUrl }];
+}
+
+function loadCurrentHost() {
+    const saved = JSON.parse(localStorage.getItem('currentHost'));
+    if (saved) return sanitizeHost(saved);
+    return null;
+}
+
 export const state = {
-    currentDomain: window.location.hostname,
+    currentDomain: defaultHost,
     masterNodeName: 'Master',
-    hosts: JSON.parse(localStorage.getItem('hosts')) || [
-        { name: 'Master', url: `http://${window.location.hostname}:8196` }
-    ],
+    hosts: loadHosts(),
     currentHost: null,
     API_BASE: '',
     hostAvailability: {}, // { url: boolean | 'checking' }
@@ -38,7 +65,7 @@ export const state = {
 };
 
 // Initialize currentHost and API_BASE
-state.currentHost = JSON.parse(localStorage.getItem('currentHost')) || state.hosts[0];
+state.currentHost = loadCurrentHost() || state.hosts[0];
 state.API_BASE = state.currentHost.url;
 
 export function saveHosts() {

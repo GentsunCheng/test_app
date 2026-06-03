@@ -33,6 +33,16 @@ function updateIntervals() {
 }
 
 // Initialization
+// 阻止浏览器默认右键菜单（空白区域），不影响输入框等表单元素和自定义右键
+document.addEventListener('contextmenu', (e) => {
+    const tag = e.target.tagName;
+    // 放行输入框、文本域、可编辑元素的选择/编辑相关右键菜单
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable) {
+        return;
+    }
+    e.preventDefault();
+});
+
 document.addEventListener('DOMContentLoaded', () => {
     updateHostDisplay();
     initEventListeners();
