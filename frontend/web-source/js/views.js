@@ -453,7 +453,7 @@ export function renderSettingsView() {
         nameCell.textContent = name;
         nameCell.title = name;
         const pathCell = row.querySelector('.col-path');
-        pathCell.textContent = info.path;
+        pathCell.textContent = truncatePath(info.path);
         pathCell.title = info.path;
         row.querySelector('.status-dot').className = `status-dot ${info.status ? 'online' : 'offline'}`;
         row.querySelector('.status-text').textContent = statusText;
