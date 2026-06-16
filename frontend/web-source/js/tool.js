@@ -363,10 +363,6 @@ function setupLoopToggle() {
 
 function startLoop() {
     const ecids = getAllNormalEcids();
-    if (ecids.length === 0) {
-        showToast('No normal units available', 'error');
-        return;
-    }
     if (toolState.loopCommands.length === 0) {
         showToast('No commands in loop list. Drag commands first.', 'error');
         return;
