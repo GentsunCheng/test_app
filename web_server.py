@@ -30,7 +30,7 @@ if __ip_conf__.exists():
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         # noinspection PyProtectedMember
-        return Path(sys._MEIPASS).joinpath(relative_path)
+        return Path(sys._MEIPASS).parent.joinpath(relative_path)
     return Path(__file__).parent.joinpath(relative_path)
 
 

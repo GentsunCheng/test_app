@@ -1,22 +1,19 @@
 import os
 import re
+import threading
 import time
 import copy
 import socket
 import random
-import asyncio
 import pexpect
 import hashlib
 import paramiko
 import subprocess as sp
 import shutil
 from pathlib import Path
-from multiprocessing import Process, Event
-from multiprocessing.shared_memory import SharedMemory
-import pickle
 import tempfile
 import traceback
-from typing import Callable, Tuple, Any, Literal, TypeAlias, get_args
+from typing import Callable, Generator, Tuple, Any, Literal, TypeAlias, get_args
 from types import MappingProxyType
 
 __CG_VENDOR_MAP__ = MappingProxyType({
@@ -146,36 +143,32 @@ def gen_ssh_key(force: bool = False) -> Path:
     return ssh_path
 
 
-class AsyncDetector:
+class Detector:
     def __init__(self):
         self.__processing__ = None
-        self.__shm__ = None
         self.__running__ = True
+        self.__ecids__ = {}
         self.__process_dict__ = {}
         self.__detail_info__ = {}
         self.__external_removable_process_ecids__ = []
         self.__ssh_path__ = gen_ssh_key()
         self.__process_external_data_thread__ = None
-        self.__stop_event__ = Event()
 
-    @staticmethod
-    async def __detector__(name: str, stop_event) -> None:
-        __ecids__ = {}
+    def __detector__(self) -> None:
         __remove_ecids__ = []
-        __shm__ = SharedMemory(name=name)
-        __buf__ = __shm__.buf
-        while not stop_event.is_set():
+        while self.__running__:
             try:
-                await asyncio.sleep(0.2)
-                proc = await asyncio.create_subprocess_exec(
-                    "usbterm", "-list",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                time.sleep(0.2)
+                proc = sp.Popen(
+                    ["usbterm", "-list"],
+                    stdout=sp.PIPE,
+                    stderr=sp.PIPE,
+                    text=True
                 )
-                stdout, stderr = await proc.communicate()
+                stdout, stderr = proc.communicate()
                 if proc.returncode:
                     continue
-                out_str = stdout.decode().strip()
+                out_str = stdout.strip()
                 lines = out_str.splitlines()
                 __remove_ecids__.clear()
 
@@ -184,67 +177,42 @@ class AsyncDetector:
                     if len(line_split) > 3:
                         location_id = safe_get(line_split, 2, "").strip()
                         ser_ecid = safe_get(line_split, 3, "").strip()
-                        __ecids__[ser_ecid.strip()[8:24]] = {}
-                        __ecids__[ser_ecid.strip()[8:24]]["ser"] = ser_ecid.strip()[:8]
-                        __ecids__[ser_ecid.strip()[8:24]]["loc"] = location_id
+                        self.__ecids__[ser_ecid.strip()[8:24]] = {}
+                        self.__ecids__[ser_ecid.strip()[8:24]]["ser"] = ser_ecid.strip()[:8]
+                        self.__ecids__[ser_ecid.strip()[8:24]]["loc"] = location_id
 
-                for ecid in __ecids__.keys():
+                for ecid in self.__ecids__.keys():
                     if ecid not in out_str:
                         __remove_ecids__.append(ecid)
 
                 for remove_ecid in __remove_ecids__:
-                    __ecids__.pop(remove_ecid, None)
+                    self.__ecids__.pop(remove_ecid, None)
 
-                serialized = pickle.dumps(__ecids__)
-                data_len = len(serialized)
-                if data_len > len(__buf__) - 4:
-                    print("Too many unit connect, out of memory!")
-                    continue
-                __buf__[:4] = len(serialized).to_bytes(4, byteorder='little')
-                __buf__[4:4 + len(serialized)] = serialized
             except KeyboardInterrupt:
-                if hasattr(__shm__, 'close'):
-                    __shm__.close()
                 break
             except Exception as e:
-                if hasattr(__shm__, 'close'):
-                    __shm__.close()
                 print(f"An error occurred: {e}")
                 traceback.print_exc()
                 break
 
-    def __run__(self) -> None:
-        asyncio.run(self.__detector__(self.__shm__.name, self.__stop_event__))
-
-    def start(self, max_mem: int = 1024) -> Callable[..., None]:
-        self.__processing__ = None
-        self.__shm__ = SharedMemory(create=True, size=max_mem)
-        self.__processing__ = Process(target=self.__run__)
-        self.__processing__.start()
-        return self.__processing__.join
+    def start(self) -> None:
+        threading.Thread(target=self.__detector__).start()
 
     def stop(self) -> None:
         for ecid, data in self.__process_dict__.items():
             data.get("tcprelay", sp.Popen(['echo'])).terminate()
             data.get("ssh", pexpect.spawn('echo')).terminate()
-        self.__stop_event__.set()
         self.__processing__ = None
         self.__running__ = False
-        self.__shm__.close()
-        self.__shm__.unlink(missing_ok=True)
 
     def get_ecids(self, full: bool = False) -> dict | list:
         data = {} if full else []
-        if self.__running__ and self.__shm__:
-            buf = self.__shm__.buf
-            data_length = int.from_bytes(buf[:4], byteorder='little')
-            if data_length > 0:
-                data_full = pickle.loads(buf[4:4 + data_length])
-                if full:
-                    data = {k: v for k, v in data_full.items() if k and v}
-                else:
-                    data_before = list(data_full.keys())
-                    data = list({item for item in data_before if item})
+        if self.__running__:
+            if full:
+                data = {k: v for k, v in self.__ecids__.items() if k and v}
+            else:
+                data_before = list(self.__ecids__.keys())
+                data = list({item for item in data_before if item})
         return data
 
     def __process_dict_lifetime__(self) -> None:
@@ -298,7 +266,8 @@ class AsyncDetector:
                 if not self.__process_dict__.get(ecid, {}).get("tcprelay", None):
                     self.__process_dict__[ecid]["tcprelay"] = self.__run_cmd__(
                         ['tcprelay', '--serialnumber', serialnumber,
-                         '--portoffset', f'{port - 22}', '22'])
+                         '--portoffset', f'{port - 22}', '22',
+                         '--autoexit', '--quiet'])
                 if not self.__process_dict__.get(ecid, {}).get("ssh", None):
                     shell_pexpect = self.__shell_pexpect__(
                         f"ssh -p {str(port)} root@localhost " +
@@ -409,6 +378,8 @@ class AsyncDetector:
                     self.__detail_info__[ecid]["battery"] = safe_get(battery, 0, "").strip()
                     self.__detail_info__[ecid]["temperature"] = safe_get(temperature, 0, "").strip()
                     self.__detail_info__[ecid]["data_size"] = data_size
+                    if more_info:
+                        pass
             else:
                 self.__detail_info__[ecid] = {}
                 self.__detail_info__[ecid]["check_timestamp"] = int(time.time())
@@ -449,6 +420,8 @@ class AsyncDetector:
                 self.__detail_info__[ecid]["config"] = config
                 self.__detail_info__[ecid]["data_size"] = data_size
                 self.__detail_info__[ecid]["cg_vendor"] = cg_vendor
+                if more_info:
+                    pass
             if not info_result:
                 self.__external_removable_process_ecids__.append(ecid)
         if isinstance(ecids, list) and ecids:
@@ -457,7 +430,7 @@ class AsyncDetector:
             return copy.deepcopy(self.__detail_info__)
 
 
-class UnitServer(AsyncDetector):
+class UnitServer(Detector):
     def __init__(self, base_path: Path):
         super().__init__()
         self.__base_path__ = base_path
@@ -476,7 +449,7 @@ class UnitServer(AsyncDetector):
         if process.returncode == 0:
             return True, f"Success rsync {source} to {target}"
         else:
-            return False, f"Failed to rsync {source} to {target}"
+            return False, f"Failed to rsync {source} to {target}: {process.stderr}"
 
     def discharge_battery(self, ecids: list[str], target_power: int = 5) -> Tuple[bool, str]:
         discharge_resources_file_name = "discharge_resources"
@@ -524,13 +497,13 @@ class UnitServer(AsyncDetector):
             return False, f"Failed to send {cmd}: {failed_units}"
 
     def upload_file_to_unit(self, ecid: str) -> Tuple[
-        Callable[
-            [str | Path, str, Literal],
-            Tuple[bool, int, str]
-        ], Callable[
-            [str | Path, str, Literal],
-            Tuple[bool, str]]
-    ] | bool:
+                                                    Callable[
+                                                        [str | Path, str, Literal],
+                                                        Tuple[bool, int, str]
+                                                    ], Callable[
+                                                        [str | Path, str, Literal],
+                                                        Tuple[bool, str]]
+                                                ] | bool:
         self.get_detail_info([], None, True)
         port = self.__process_dict__.get(ecid, {}).get("port", None)
         unit_temp_path = None
@@ -593,19 +566,50 @@ class UnitServer(AsyncDetector):
 
         return upload, merge
 
-    def download_file_from_unit(self, ecid: str, file_path: str | Path):
-        pass
+    def download_file_from_unit(self, ecid: str, file_path: str | Path) -> Generator[
+            Tuple[bool, str], Any, Tuple[bool, str]]:
+        self.get_detail_info([], None, True)
+        port = self.__process_dict__.get(ecid, {}).get("port", None)
+        unit_temp_path = None
+        if port:
+            command = "mktemp -d"
+            mktmp_result, mktmp_output = self.__remote_ssh_cmd__(port, command)
+            if not mktmp_result:
+                return False, "Failed to mktmp"
+            unit_temp_path = safe_get(mktmp_output, 0, None).strip()
+        if not port or not unit_temp_path:
+            return False, "Failed to download file"
+        shasum_tool = self.__base_path__.joinpath("unit_tools/shasum.py")
+        unit_shasum_path = None
+        _unit_shasum_path = "/var/root/shasum_tool"
+        rsync_result, _ = self.__rsync_core__(port, str(shasum_tool), f"root@localhost:{_unit_shasum_path}")
+        if rsync_result:
+            unit_shasum_path = _unit_shasum_path
+        split_cmd = f"split -b 1M {file_path} {unit_temp_path}/part_"
+        self.__remote_ssh_cmd__(port, split_cmd)
+        split_result, split_files = self.__remote_ssh_cmd__(port, f"ls {unit_temp_path}/part_*")
+        if not split_result:
+            return False, "Failed to split file"
+        local_tmp = tempfile.mkdtemp()
+        for file in split_files:
+            rsync_result = False
+            for _ in range(10):
+                rsync_result, _ = self.__rsync_core__(port, f"root@localhost:{unit_temp_path}/{file}", local_tmp)
+                if rsync_result:
+                    break
+            if not rsync_result:
+                return False, "Failed to download file"
+            yield True, f"{local_tmp}/{file}"
+        return False, "Failed to download file"
 
 
 if __name__ == '__main__':
     t = UnitServer(Path().home() / ".stress_rack_test")
-    joiner = t.start()
-    while True:
-        try:
-            print(t.get_ecids())
-            print(t.get_detail_info([]))
-            time.sleep(0.5)
-        except KeyboardInterrupt:
-            t.stop()
-            joiner()
-            break
+    t.start()
+    t.get_ecids(True)
+    time.sleep(1)
+    downloader = t.download_file_from_unit(ecid="00017C803400010A", file_path="/var/root/file")
+    for value in downloader:
+        print(value)
+        print(value[0])
+        print(value[1])

@@ -21,6 +21,8 @@ from itertools import zip_longest
 from typing import Tuple, List, Dict, Any
 from types import MappingProxyType
 
+from backend.utils import logger_debug
+
 __IS_ALIVE__ = True
 
 __SPECIAL_CMD__ = MappingProxyType({
@@ -64,6 +66,7 @@ __NECESSARY_FILE__ = ("common_files", "project_files", "test_flow.ini", "config.
 info_queue = BlockingQueue(maxsize=64)
 
 
+@logger_debug
 def scan_local_script() -> Dict:
     script_path_dict = {}
     desktop = Path().home().joinpath("Desktop")
@@ -143,6 +146,7 @@ def log_message(base_path: Path, test_method: str, message: str):
     archive_and_cleanup_old_logs()
 
 
+@logger_debug
 def save_info_to_excel():
     if __INFO_EXCEL_PATH__.exists():
         wb = openpyxl.load_workbook(__INFO_EXCEL_PATH__)
@@ -478,6 +482,7 @@ class TestScript:
         else:
             return False, success_ecid
 
+    @logger_debug
     def __adjust_space__(self) -> bool:
         retain_scale = 0.5
         retain_space = 2 * 1024
@@ -580,43 +585,49 @@ class TestScript:
 
     def __test_lifetime_detector__(self):
         while self.__running__:
-            __removable_ecids__ = []
-            for ecid, data in self.__testing_dict__.items():
-                thread = data.get("thread", None)
-                log_level = data.get("test_status", {}).get("log_level", None)
-                test_method = data.get("test_status", {}).get("test_method", None)
-                log_stream = data.get("log_stream", None)
-                if all([isinstance(thread, threading.Thread),
-                        isinstance(log_level, str),
-                        isinstance(test_method, str),
-                        isinstance(log_stream, io.BytesIO) or isinstance(log_stream, io.StringIO)]):
-                    if not thread.is_alive():
+            try:
+                __removable_ecids__ = []
+                for ecid, data in self.__testing_dict__.items():
+                    thread = data.get("thread", None)
+                    log_level = data.get("test_status", {}).get("log_level", None)
+                    test_method = data.get("test_status", {}).get("test_method", None)
+                    log_stream = data.get("log_stream", None)
+                    if all([isinstance(thread, threading.Thread),
+                            isinstance(log_level, str),
+                            isinstance(test_method, str),
+                            isinstance(log_stream, io.BytesIO) or isinstance(log_stream, io.StringIO)]):
+                        if not thread.is_alive():
+                            __removable_ecids__.append(ecid)
+                    else:
                         __removable_ecids__.append(ecid)
-                else:
-                    __removable_ecids__.append(ecid)
-            for ecid in self.__testing_data_size__.keys():
-                data = self.__testing_dict__.get(ecid, {})
-                thread = data.get("thread", None)
-                if isinstance(thread, threading.Thread):
-                    if not thread.is_alive():
+                for ecid in self.__testing_data_size__.keys():
+                    data = self.__testing_dict__.get(ecid, {})
+                    thread = data.get("thread", None)
+                    if isinstance(thread, threading.Thread):
+                        if not thread.is_alive():
+                            __removable_ecids__.append(ecid)
+                    else:
                         __removable_ecids__.append(ecid)
-                else:
-                    __removable_ecids__.append(ecid)
-            __removable_ecids__ = list(set(__removable_ecids__))
-            for removable_ecid in __removable_ecids__:
-                log_level = self.__testing_dict__.get(removable_ecid, {}).get("test_status", {}).get("log_level", None)
-                log_stream = self.__testing_dict__.get(removable_ecid, {}).get("log_stream", None)
-                test_method = self.__testing_dict__.get(removable_ecid, {}).get("test_status", {}).get("test_method", None)
-                workdir = self.__testing_dict__.get(removable_ecid, {}).get("workdir", None)
-                if Path(workdir).is_dir():
-                    shutil.rmtree(workdir)
-                if log_level == "info":
-                    log_str = log_stream.getvalue().decode('utf-8', errors='ignore')
-                    log_message(self.__base_path__, test_method, log_str)
-                log_stream.close()
-                self.__testing_dict__.pop(removable_ecid, None)
-                self.__testing_data_size__.pop(removable_ecid, None)
-            time.sleep(0.75)
+                __removable_ecids__ = list(set(__removable_ecids__))
+                for removable_ecid in __removable_ecids__:
+                    log_level = self.__testing_dict__.get(removable_ecid, {}).get("test_status", {}).get("log_level", None)
+                    log_stream = self.__testing_dict__.get(removable_ecid, {}).get("log_stream", None)
+                    test_method = self.__testing_dict__.get(removable_ecid, {}).get("test_status", {}).get("test_method", None)
+                    workdir = self.__testing_dict__.get(removable_ecid, {}).get("workdir", None)
+                    if Path(workdir).is_dir():
+                        try:
+                            shutil.rmtree(workdir, ignore_errors=True)
+                        except Exception as e:
+                            print(f"Failed to remove {workdir}: {e}")
+                    if log_level == "info":
+                        log_str = log_stream.getvalue().decode('utf-8', errors='ignore')
+                        log_message(self.__base_path__, test_method, log_str)
+                    log_stream.close()
+                    self.__testing_dict__.pop(removable_ecid, None)
+                    self.__testing_data_size__.pop(removable_ecid, None)
+                time.sleep(0.75)
+            except Exception as e:
+                print(f"Cleaner failed: {e}")
 
 
 if __name__ == '__main__':
