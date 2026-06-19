@@ -785,6 +785,10 @@ export function updateMainView() {
         if (btn) btn.classList.toggle('active', state.currentView === view);
     });
 
+    // Guard: only render main content for known sub-views (not nav-level pages)
+    const knownViews = ['units', 'settings', 'logs', 'test', 'tool'];
+    if (!knownViews.includes(state.currentView)) return;
+
     if (state.currentView === 'settings') return renderSettingsView();
     if (state.currentView === 'test') return renderTestView();
     if (state.currentView === 'logs') {

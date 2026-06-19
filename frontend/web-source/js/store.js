@@ -35,6 +35,7 @@ export const state = {
     hosts: loadHosts(),
     currentHost: null,
     API_BASE: '',
+    navPage: localStorage.getItem('navPage') || 'pre_test', // 'pre_test', 'test', 'end_test', 'toolbox'
     hostAvailability: {}, // { url: boolean | 'checking' }
     allUnits: [], // { id, type: 'normal' | 'testing', detail: null }
     selectedIds: new Set(),
@@ -56,6 +57,7 @@ export const state = {
     lastLogSelection: '', // Serialized selectedIds
     lastMouseMoveTime: Date.now(),
     currentRefreshState: 'active', // 'active', 'idle', 'hidden'
+    _docListenersInited: false,
     unitsInterval: null,
     scriptsInterval: null,
     missingNormalUnitSince: new Map(), // { ecid -> timestamp when first missing from both lists }

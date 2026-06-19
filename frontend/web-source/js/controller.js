@@ -1,5 +1,5 @@
 import { state, saveHosts, updateAPI } from './store.js';
-import { elements, showToast, stopLogs, closeMethodModal, closeModal, addScriptEntry, validateScriptEntry, closeMoreDetailInfo, showMoreDetailInfo } from './utils.js';
+import { elements, refreshElements, showToast, stopLogs, closeMethodModal, closeModal, addScriptEntry, validateScriptEntry, closeMoreDetailInfo, showMoreDetailInfo } from './utils.js';
 import { checkHostAvailability, fetchUnits, fetchScriptInfo, addScript, runTest, scanTestScript } from './services.js';
 import { 
     renderHostList, 
@@ -25,6 +25,113 @@ function selectRange(fromId, toId) {
     for (let i = start; i <= end; i++) {
         state.selectedIds.add(state.allUnits[i].id);
     }
+}
+
+export function switchNavPage(page) {
+    state.navPage = page;
+    localStorage.setItem('navPage', page);
+
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.page === page);
+    });
+
+    // Clear logs and state
+    stopLogs();
+    state.selectedIds.clear();
+    state.focusId = null;
+    state.anchorId = null;
+    state.lastLogSelection = '';
+
+    // Replace entire container DOM
+    const container = document.querySelector('.container');
+    if (!container) return;
+
+    if (page === 'test') {
+        container.innerHTML = getTestPageHTML();
+        refreshElements();
+        initEventListeners();
+        state.currentView = 'test';
+        updateMainView();
+        fetchScriptInfo(renderTestView);
+    } else {
+        const pageTitles = {
+            pre_test: 'Pre Test',
+            end_test: 'End Test',
+            toolbox: 'Toolbox'
+        };
+        container.innerHTML = `
+            <main class="main-view" style="display: flex; align-items: center; justify-content: center;">
+                <div style="text-align: center; color: var(--text-secondary);">
+                    <h1 style="font-size: 28px; font-weight: 600; margin-bottom: 12px;">${pageTitles[page] || 'Page'}</h1>
+                    <p style="font-size: 16px;">Coming soon...</p>
+                </div>
+            </main>
+        `;
+        state.currentView = 'nav_blank';
+    }
+
+    // 通知 main.js 重新计算轮询频率
+    window.dispatchEvent(new CustomEvent('navpagechange'));
+}
+
+function getTestPageHTML() {
+    return `
+        <aside class="toolbar">
+            <div class="unit-search-container">
+                <label for="unit_search_input"></label>
+                <input type="text" id="unit_search_input" class="no-select" placeholder="Search units...">
+                <div class="search-options">
+                    <button id="btn_unit_regex" class="no-select" title="Regular Expression">.*</button>
+                    <button id="btn_unit_case" class="no-select" title="Match Case">Aa</button>
+                </div>
+            </div>
+            <div id="unit_list" class="unit-list" tabindex="0"></div>
+            <div id="control_button_bar" class="control-button-bar">
+                <button id="btn_test" class="no-select">Test</button>
+                <button id="btn_log" class="no-select">Log</button>
+                <button id="btn_setting" class="no-select">Setting</button>
+            </div>
+            <div class="host-switcher-bar">
+                <button id="btn_host" class="btn-host-switch no-select">
+                    <span id="current_host_name">Loading</span>
+                </button>
+            </div>
+        </aside>
+        <main class="main-view">
+            <div id="main_content"></div>
+            <div id="tool_view" class="tool-view" style="display: none;">
+                <div class="unit-tool"></div>
+                <div class="battery-discharge">
+                    <input type="number" id="discharge_power_input" class="discharge-input" min="0" max="100" value="5" placeholder="0-100">
+                    <button id="btn_discharge" class="cmd-btn discharge-btn">discharge</button>
+                </div>
+                <div class="loop-untils">
+                    <div class="loop-cmd">
+                        <div class="loop-list" id="loop_list">
+                            <span class="loop-list-placeholder">Drag commands here</span>
+                        </div>
+                        <button id="btn_loop_toggle" class="cmd-btn loop-btn no-select">Loop</button>
+                    </div>
+                    <div class="loop-results">
+                        <table class="script-table loop-table">
+                            <thead id="loop_results_header"><tr><th>ECID</th></tr></thead>
+                            <tbody id="loop_results_body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div id="toast_container" class="toast-container"></div>
+        </main>
+    `;
+}
+
+export function initNavToolbar() {
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            switchNavPage(btn.dataset.page);
+        });
+    });
+    switchNavPage(state.navPage);
 }
 
 export function handleUnitClick(e, unit) {
@@ -186,50 +293,197 @@ export function initEventListeners() {
         }
     };
 
-    document.addEventListener('keydown', (e) => {
-        const isMethodModalOpen = elements.methodModalOverlay.style.display === 'flex';
-        if (!isMethodModalOpen) return;
+    // Document-level listeners: only bind once
+    if (!state._docListenersInited) {
+        state._docListenersInited = true;
 
-        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-            if (document.activeElement === elements.methodSearchInput) return;
-            const now = Date.now();
-            if (state._lastArrowTime && now - state._lastArrowTime < 100) return;
-            state._lastArrowTime = now;
-            e.preventDefault();
-            const items = elements.methodListContainer.querySelectorAll('.method-item');
-            if (items.length === 0) return;
+        document.addEventListener('keydown', (e) => {
+            const isMethodModalOpen = elements.methodModalOverlay.style.display === 'flex';
+            if (!isMethodModalOpen) return;
 
-            const delta = e.key === 'ArrowDown' ? 1 : -1;
-            let newIndex = state.methodFocusIndex + delta;
-            if (newIndex < 0) newIndex = 0;
-            if (newIndex >= items.length) newIndex = items.length - 1;
-            if (newIndex === state.methodFocusIndex) return;
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                if (document.activeElement === elements.methodSearchInput) return;
+                const now = Date.now();
+                if (state._lastArrowTime && now - state._lastArrowTime < 100) return;
+                state._lastArrowTime = now;
+                e.preventDefault();
+                const items = elements.methodListContainer.querySelectorAll('.method-item');
+                if (items.length === 0) return;
 
-            state.methodFocusIndex = newIndex;
-            const targetMethod = items[newIndex].dataset.method;
-            state.selectedMethod = targetMethod;
-            elements.btnMethodConfirm.disabled = false;
-            filterMethods();
+                const delta = e.key === 'ArrowDown' ? 1 : -1;
+                let newIndex = state.methodFocusIndex + delta;
+                if (newIndex < 0) newIndex = 0;
+                if (newIndex >= items.length) newIndex = items.length - 1;
+                if (newIndex === state.methodFocusIndex) return;
+
+                state.methodFocusIndex = newIndex;
+                const targetMethod = items[newIndex].dataset.method;
+                state.selectedMethod = targetMethod;
+                elements.btnMethodConfirm.disabled = false;
+                filterMethods();
+            }
+
+            if (e.key === 'Home' || e.key === 'End') {
+                if (document.activeElement === elements.methodSearchInput) return;
+                e.preventDefault();
+                const items = elements.methodListContainer.querySelectorAll('.method-item');
+                if (items.length === 0) return;
+
+                const newIndex = e.key === 'Home' ? 0 : items.length - 1;
+                state.methodFocusIndex = newIndex;
+                state.selectedMethod = items[newIndex].dataset.method;
+                elements.btnMethodConfirm.disabled = false;
+                filterMethods();
+            }
+
+            if (e.key === 'Enter' && !elements.btnMethodConfirm.disabled && document.activeElement !== elements.methodSearchInput) {
+                e.preventDefault();
+                elements.btnMethodConfirm.click();
+            }
+        });
+
+        // Spacebar listeners
+        let spaceTimer = null;
+        let spaceLongPress = false;
+        let wasModalOpenBeforePress = false;
+        const SPACE_LONG_PRESS_MS = 250;
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === ' ' || e.code === 'Space') {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+                if (state.selectedIds.size === 0) return;
+                if (spaceTimer !== null) return;
+
+                e.preventDefault();
+                wasModalOpenBeforePress = elements.detailInfoModalOverlay.style.display === 'flex';
+                spaceLongPress = false;
+
+                if (!wasModalOpenBeforePress) {
+                    showMoreDetailInfo();
+                }
+
+                spaceTimer = setTimeout(() => {
+                    spaceLongPress = true;
+                    spaceTimer = null;
+                }, SPACE_LONG_PRESS_MS);
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === ' ' || e.code === 'Space') {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+
+                e.preventDefault();
+                if (spaceTimer !== null) {
+                    clearTimeout(spaceTimer);
+                    spaceTimer = null;
+                }
+                if (spaceLongPress) {
+                    closeMoreDetailInfo();
+                } else if (wasModalOpenBeforePress) {
+                    closeMoreDetailInfo();
+                }
+            }
+        });
+
+        // ESC to close detail info modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && elements.detailInfoModalOverlay.style.display === 'flex') {
+                closeMoreDetailInfo();
+            }
+        });
+
+        // Global text/input context menu
+        if (!document.getElementById('text_context_menu')) {
+            const textCtxMenu = document.createElement('div');
+            textCtxMenu.id = 'text_context_menu';
+            textCtxMenu.className = 'context-menu';
+            textCtxMenu.innerHTML = '<div class="ctx-inner"></div>';
+            document.body.appendChild(textCtxMenu);
         }
 
-        if (e.key === 'Home' || e.key === 'End') {
-            if (document.activeElement === elements.methodSearchInput) return;
-            e.preventDefault();
-            const items = elements.methodListContainer.querySelectorAll('.method-item');
-            if (items.length === 0) return;
+        document.addEventListener('contextmenu', (e) => {
+            const textCtxMenu = document.getElementById('text_context_menu');
+            if (!textCtxMenu) return;
+            const target = e.target;
+            const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+            if (!isInput) return;
 
-            const newIndex = e.key === 'Home' ? 0 : items.length - 1;
-            state.methodFocusIndex = newIndex;
-            state.selectedMethod = items[newIndex].dataset.method;
-            elements.btnMethodConfirm.disabled = false;
-            filterMethods();
-        }
-
-        if (e.key === 'Enter' && !elements.btnMethodConfirm.disabled && document.activeElement !== elements.methodSearchInput) {
             e.preventDefault();
-            elements.btnMethodConfirm.click();
-        }
-    });
+            const inner = textCtxMenu.querySelector('.ctx-inner');
+            inner.innerHTML = '';
+            const selection = window.getSelection();
+            const hasSelection = selection && !selection.isCollapsed && selection.toString().trim().length > 0;
+            let hasInputSelection = false;
+
+            if (isInput) {
+                hasInputSelection = target.selectionStart !== undefined && target.selectionStart !== target.selectionEnd;
+            }
+
+            if (hasInputSelection) {
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'ctx-btn';
+                copyBtn.textContent = 'Copy';
+                copyBtn.addEventListener('click', () => {
+                    try { document.execCommand('copy'); showToast('Copied', 'success'); } catch {}
+                    textCtxMenu.classList.remove('visible');
+                });
+                inner.appendChild(copyBtn);
+
+                const cutBtn = document.createElement('button');
+                cutBtn.className = 'ctx-btn';
+                cutBtn.textContent = 'Cut';
+                cutBtn.addEventListener('click', () => {
+                    try { document.execCommand('cut'); showToast('Cut', 'success'); } catch {}
+                    textCtxMenu.classList.remove('visible');
+                });
+                inner.appendChild(cutBtn);
+            } else if (hasSelection) {
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'ctx-btn';
+                copyBtn.textContent = 'Copy';
+                copyBtn.addEventListener('click', () => {
+                    try { document.execCommand('copy'); showToast('Copied', 'success'); } catch {}
+                    textCtxMenu.classList.remove('visible');
+                });
+                inner.appendChild(copyBtn);
+            }
+
+            if (isInput) {
+                const pasteBtn = document.createElement('button');
+                pasteBtn.className = 'ctx-btn';
+                pasteBtn.textContent = 'Paste';
+                pasteBtn.addEventListener('click', async () => {
+                    textCtxMenu.classList.remove('visible');
+                    target.focus();
+                    let pasted = '';
+                    try { pasted = await navigator.clipboard.readText(); } catch {}
+                    if (pasted) {
+                        const start = target.selectionStart;
+                        const end = target.selectionEnd;
+                        const prev = target.value;
+                        target.value = prev.slice(0, start) + pasted + prev.slice(end);
+                        target.selectionStart = target.selectionEnd = start + pasted.length;
+                        target.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                });
+                inner.appendChild(pasteBtn);
+            }
+
+            if (inner.children.length > 0) {
+                textCtxMenu.style.left = e.clientX + 'px';
+                textCtxMenu.style.top = e.clientY + 'px';
+                textCtxMenu.classList.add('visible');
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('text_context_menu');
+            if (menu && menu.classList.contains('visible') && !menu.contains(e.target)) {
+                menu.classList.remove('visible');
+            }
+        });
+    }
 
     elements.methodSearchInput.oninput = filterMethods;
     elements.btnSearchRegex.onclick = function() {
@@ -353,185 +607,12 @@ export function initEventListeners() {
         }
     };
 
-    // Spacebar: long press = show immediately on press, close on release; short press = toggle
-    // Also prevent default space scrolling on the unit list element
-    elements.unitListContainer.addEventListener('keydown', (e) => {
-        if (e.key === ' ' || e.code === 'Space') {
-            e.preventDefault();
-        }
-    });
-
-    let spaceTimer = null;
-    let spaceLongPress = false;
-    let wasModalOpenBeforePress = false;
-    const SPACE_LONG_PRESS_MS = 250;
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === ' ' || e.code === 'Space') {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
-            if (state.selectedIds.size === 0) return;
-            if (spaceTimer !== null) return;
-
-            e.preventDefault();
-
-            wasModalOpenBeforePress = elements.detailInfoModalOverlay.style.display === 'flex';
-            spaceLongPress = false;
-
-            if (!wasModalOpenBeforePress) {
-                showMoreDetailInfo();
+    // Spacebar: prevent default scrolling on unit list (re-bound per render)
+    if (elements.unitListContainer) {
+        elements.unitListContainer.addEventListener('keydown', (e) => {
+            if (e.key === ' ' || e.code === 'Space') {
+                e.preventDefault();
             }
-
-            spaceTimer = setTimeout(() => {
-                spaceLongPress = true;
-                spaceTimer = null;
-            }, SPACE_LONG_PRESS_MS);
-        }
-    });
-
-    document.addEventListener('keyup', (e) => {
-        if (e.key === ' ' || e.code === 'Space') {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
-
-            e.preventDefault();
-
-            if (spaceTimer !== null) {
-                clearTimeout(spaceTimer);
-                spaceTimer = null;
-            }
-
-            if (spaceLongPress) {
-                closeMoreDetailInfo();
-            } else if (wasModalOpenBeforePress) {
-                closeMoreDetailInfo();
-            }
-        }
-    });
-
-    // ESC to close detail info modal
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && elements.detailInfoModalOverlay.style.display === 'flex') {
-            closeMoreDetailInfo();
-        }
-    });
-
-    // Global text/input context menu
-    const textCtxMenu = document.createElement('div');
-    textCtxMenu.id = 'text_context_menu';
-    textCtxMenu.className = 'context-menu';
-    textCtxMenu.innerHTML = '<div class="ctx-inner"></div>';
-    document.body.appendChild(textCtxMenu);
-
-    function hideTextCtxMenu() {
-        textCtxMenu.classList.remove('visible');
+        });
     }
-
-    function updateTextCtxMenu(e) {
-        const inner = textCtxMenu.querySelector('.ctx-inner');
-        inner.innerHTML = '';
-        const target = e.target;
-        const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-        const selection = window.getSelection();
-        const hasSelection = selection && !selection.isCollapsed && selection.toString().trim().length > 0;
-        let hasInputSelection = false;
-
-        if (isInput) {
-            hasInputSelection = target.selectionStart !== undefined && target.selectionStart !== target.selectionEnd;
-        }
-
-        if (hasInputSelection) {
-            const copyBtn = document.createElement('button');
-            copyBtn.className = 'ctx-btn';
-            copyBtn.textContent = 'Copy';
-            copyBtn.addEventListener('click', () => {
-                document.execCommand('copy');
-                showToast('Copied', 'success');
-                hideTextCtxMenu();
-            });
-            inner.appendChild(copyBtn);
-
-            const cutBtn = document.createElement('button');
-            cutBtn.className = 'ctx-btn';
-            cutBtn.textContent = 'Cut';
-            cutBtn.addEventListener('click', () => {
-                document.execCommand('cut');
-                showToast('Cut', 'success');
-                hideTextCtxMenu();
-            });
-            inner.appendChild(cutBtn);
-        } else if (hasSelection) {
-            const copyBtn = document.createElement('button');
-            copyBtn.className = 'ctx-btn';
-            copyBtn.textContent = 'Copy';
-            copyBtn.addEventListener('click', () => {
-                document.execCommand('copy');
-                showToast('Copied', 'success');
-                hideTextCtxMenu();
-            });
-            inner.appendChild(copyBtn);
-        }
-
-        if (isInput) {
-            const pasteBtn = document.createElement('button');
-            pasteBtn.className = 'ctx-btn';
-            pasteBtn.textContent = 'Paste';
-            pasteBtn.addEventListener('click', async () => {
-                hideTextCtxMenu();
-                const prev = target.value;
-                target.focus();
-
-                let pasted = '';
-                try {
-                    pasted = await navigator.clipboard.readText();
-                } catch {
-                    const temp = document.createElement('textarea');
-                    temp.style.position = 'fixed';
-                    temp.style.left = '-9999px';
-                    temp.style.top = '-9999px';
-                    document.body.appendChild(temp);
-                    temp.focus();
-                    if (document.execCommand('paste')) {
-                        pasted = temp.value;
-                    }
-                    document.body.removeChild(temp);
-                }
-
-                if (pasted) {
-                    const start = target.selectionStart;
-                    const end = target.selectionEnd;
-                    target.value = prev.substring(0, start) + pasted + prev.substring(end);
-                    target.selectionStart = target.selectionEnd = start + pasted.length;
-                    target.dispatchEvent(new Event('input', { bubbles: true }));
-                    showToast('Pasted', 'success');
-                } else {
-                    target.value = prev;
-                    showToast('Paste failed', 'error');
-                }
-            });
-            inner.appendChild(pasteBtn);
-        }
-
-        if (inner.children.length > 0) {
-            e.preventDefault();
-            e.stopPropagation();
-            textCtxMenu.style.left = e.clientX + 'px';
-            textCtxMenu.style.top = e.clientY + 'px';
-            textCtxMenu.classList.add('visible');
-        }
-    }
-
-    document.addEventListener('contextmenu', (e) => {
-        if (e.defaultPrevented) return;
-        const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
-        const selection = window.getSelection();
-        const hasSelection = selection && !selection.isCollapsed && selection.toString().trim().length > 0;
-        if (isInput || hasSelection) {
-            updateTextCtxMenu(e);
-        }
-    });
-
-    document.addEventListener('click', (e) => {
-        if (!textCtxMenu.contains(e.target)) {
-            hideTextCtxMenu();
-        }
-    });
 }

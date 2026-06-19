@@ -184,6 +184,41 @@ export const elements = {
     btnDetailInfoClose: document.getElementById('btn_detail_info_close')
 };
 
+export function refreshElements() {
+    elements.hostModalOverlay = document.getElementById('host_modal_overlay');
+    elements.hostListContainer = document.getElementById('host_list');
+    elements.currentHostNameSpan = document.getElementById('current_host_name');
+    elements.newHostNameInput = document.getElementById('new_host_name');
+    elements.newHostUrlInput = document.getElementById('new_host_url');
+    elements.unitListContainer = document.getElementById('unit_list');
+    elements.controlButtonBar = document.getElementById('control_button_bar');
+    elements.mainContent = document.getElementById('main_content');
+    elements.modalOverlay = document.getElementById('modal_overlay');
+    elements.methodModalOverlay = document.getElementById('method_modal_overlay');
+    elements.methodListContainer = document.getElementById('method_list');
+    elements.methodModalTitle = document.getElementById('method_modal_title');
+    elements.toastContainer = document.getElementById('toast_container');
+    elements.scriptEntryList = document.getElementById('script_entry_list');
+    elements.btnAddEntry = document.getElementById('btn_add_entry');
+    elements.unitSearchInput = document.getElementById('unit_search_input');
+    elements.methodSearchInput = document.getElementById('method_search_input');
+    elements.btnSearchRegex = document.getElementById('btn_search_regex');
+    elements.btnSearchCase = document.getElementById('btn_search_case');
+    elements.btnUnitRegex = document.getElementById('btn_unit_regex');
+    elements.btnUnitCase = document.getElementById('btn_unit_case');
+    elements.btnMethodConfirm = document.getElementById('btn_method_confirm');
+    elements.btnHost = document.getElementById('btn_host');
+    elements.btnHostCancel = document.getElementById('btn_host_cancel');
+    elements.btnHostAdd = document.getElementById('btn_host_add');
+    elements.btnModalCancel = document.getElementById('btn_modal_cancel');
+    elements.btnMethodCancel = document.getElementById('btn_method_cancel');
+    elements.btnModalAdd = document.getElementById('btn_modal_add');
+    elements.btnScanScript = document.getElementById('btn_scan_script');
+    elements.detailInfoModalOverlay = document.getElementById('detail_info_modal_overlay');
+    elements.detailInfoContent = document.getElementById('detail_info_content');
+    elements.btnDetailInfoClose = document.getElementById('btn_detail_info_close');
+}
+
 export function showToast(message, type) {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;

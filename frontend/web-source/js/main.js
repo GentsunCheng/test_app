@@ -2,11 +2,20 @@ import { state } from './store.js';
 import { getRefreshRates } from './utils.js';
 import { fetchUnits, fetchScriptInfo, checkHostAvailability } from './services.js';
 import { updateHostDisplay, renderUnits, updateMainView, renderSettingsView, renderTestView } from './views.js';
-import { initEventListeners, handleUnitClick } from './controller.js';
+import { initEventListeners, initNavToolbar, handleUnitClick } from './controller.js';
 import { refreshAllTTLs } from './detailCache.js';
 
 function updateIntervals() {
     const rates = getRefreshRates();
+
+    // 非 test 页面时，后台轮询降为 60s
+    const isTestPage = state.navPage === 'test';
+    if (!isTestPage) {
+        rates.units = 60000;
+        rates.scripts = 60000;
+        rates.state = 'nav_background';
+    }
+
     if (rates.state === state.currentRefreshState) return;
     
     state.currentRefreshState = rates.state;
@@ -44,6 +53,9 @@ document.addEventListener('contextmenu', (e) => {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
+    // 导航页面切换时重新计算轮询频率（需在 initNavToolbar 之前注册）
+    window.addEventListener('navpagechange', updateIntervals);
+
     updateHostDisplay();
     initEventListeners();
     
@@ -60,6 +72,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     fetchScriptInfo();
 
+    // 先建立初始轮询，再初始化导航栏（navpagechange 事件会自动纠正非 test 页面的频率）
+    const initialRates = getRefreshRates();
+    state.unitsInterval = setInterval(() => {
+        fetchUnits(() => {
+            renderUnits(handleUnitClick);
+            updateMainView();
+        });
+    }, initialRates.units);
+
+    state.scriptsInterval = setInterval(() => {
+        if (state.currentView === 'settings') fetchScriptInfo(renderSettingsView);
+        if (state.currentView === 'test') fetchScriptInfo(renderTestView);
+    }, initialRates.scripts);
+
+    // 导航栏初始化（会触发 navpagechange，非 test 页面会将频率降为 60s）
+    initNavToolbar();
+
     // Listeners for user activity
     window.addEventListener('mousemove', () => {
         state.lastMouseMoveTime = Date.now();
@@ -75,20 +104,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (idleTime > 60000) updateIntervals();
         }
     }, 5000);
-
-    // Start with initial intervals
-    const initialRates = getRefreshRates();
-    state.unitsInterval = setInterval(() => {
-        fetchUnits(() => {
-            renderUnits(handleUnitClick);
-            updateMainView();
-        });
-    }, initialRates.units);
-
-    state.scriptsInterval = setInterval(() => {
-        if (state.currentView === 'settings') fetchScriptInfo(renderSettingsView);
-        if (state.currentView === 'test') fetchScriptInfo(renderTestView);
-    }, initialRates.scripts);
 
     setInterval(refreshAllTTLs, 60000);
 });

@@ -10,60 +10,91 @@
     <link rel="manifest" href="manifest.json">
 </head>
 <body>
-    <div class="container">
-        <aside class="toolbar">
-            <div class="unit-search-container">
-                <label for="unit_search_input"></label><input type="text" id="unit_search_input" class="no-select" placeholder="Search units...">
-                <div class="search-options">
-                    <button id="btn_unit_regex" class="no-select" title="Regular Expression">.*</button>
-                    <button id="btn_unit_case" class="no-select" title="Match Case">Aa</button>
-                </div>
-            </div>
-            <div id="unit_list" class="unit-list" tabindex="0">
-                <!-- Units will be injected here -->
-            </div>
-            <div id="control_button_bar" class="control-button-bar">
-                <button id="btn_test" class="no-select">Test</button>
-                <button id="btn_log" class="no-select">Log</button>
-                <button id="btn_setting" class="no-select">Setting</button>
-            </div>
-            <div class="host-switcher-bar">
-                <button id="btn_host" class="btn-host-switch no-select">
-                    <span id="current_host_name">Loading</span>
+    <div class="app-wrapper">
+        <nav class="nav-toolbar" id="nav_toolbar">
+            <div class="nav-toolbar-inner">
+                <button class="nav-btn" data-page="pre_test">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <path d="m9 12 2 2 4-4"/>
+                    </svg>
+                    <span class="nav-label">Pre Test</span>
+                </button>
+                <button class="nav-btn" data-page="test">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="6 3 20 12 6 21 6 3"/>
+                    </svg>
+                    <span class="nav-label">Test</span>
+                </button>
+                <button class="nav-btn" data-page="end_test">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="4" y="4" width="16" height="16" rx="2"/>
+                    </svg>
+                    <span class="nav-label">End Test</span>
+                </button>
+                <button class="nav-btn" data-page="toolbox">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                    </svg>
+                    <span class="nav-label">Toolbox</span>
                 </button>
             </div>
-        </aside>
-        <main class="main-view">
-            <div id="main_content">
-                <h1>StressRack Test</h1>
-                <p>Select a unit to see details or logs.</p>
-            </div>
-            <div id="tool_view" class="tool-view" style="display: none;">
-                <div class="unit-tool">
+        </nav>
+        <div class="container">
+            <aside class="toolbar">
+                <div class="unit-search-container">
+                    <label for="unit_search_input"></label><input type="text" id="unit_search_input" class="no-select" placeholder="Search units...">
+                    <div class="search-options">
+                        <button id="btn_unit_regex" class="no-select" title="Regular Expression">.*</button>
+                        <button id="btn_unit_case" class="no-select" title="Match Case">Aa</button>
+                    </div>
                 </div>
-                <div class="battery-discharge">
-                    <input type="number" id="discharge_power_input" class="discharge-input" min="0" max="100" value="5" placeholder="0-100">
-                    <button id="btn_discharge" class="cmd-btn discharge-btn">discharge</button>
+                <div id="unit_list" class="unit-list" tabindex="0">
+                    <!-- Units will be injected here -->
                 </div>
-                <div class="loop-untils">
-                    <div class="loop-cmd">
-                        <div class="loop-list" id="loop_list">
-                            <span class="loop-list-placeholder">Drag commands here</span>
+                <div id="control_button_bar" class="control-button-bar">
+                    <button id="btn_test" class="no-select">Test</button>
+                    <button id="btn_log" class="no-select">Log</button>
+                    <button id="btn_setting" class="no-select">Setting</button>
+                </div>
+                <div class="host-switcher-bar">
+                    <button id="btn_host" class="btn-host-switch no-select">
+                        <span id="current_host_name">Loading</span>
+                    </button>
+                </div>
+            </aside>
+            <main class="main-view">
+                <div id="main_content">
+                    <h1>StressRack Test</h1>
+                    <p>Select a unit to see details or logs.</p>
+                </div>
+                <div id="tool_view" class="tool-view" style="display: none;">
+                    <div class="unit-tool">
+                    </div>
+                    <div class="battery-discharge">
+                        <input type="number" id="discharge_power_input" class="discharge-input" min="0" max="100" value="5" placeholder="0-100">
+                        <button id="btn_discharge" class="cmd-btn discharge-btn">discharge</button>
+                    </div>
+                    <div class="loop-untils">
+                        <div class="loop-cmd">
+                            <div class="loop-list" id="loop_list">
+                                <span class="loop-list-placeholder">Drag commands here</span>
+                            </div>
+                            <button id="btn_loop_toggle" class="cmd-btn loop-btn no-select">Loop</button>
                         </div>
-                        <button id="btn_loop_toggle" class="cmd-btn loop-btn no-select">Loop</button>
-                    </div>
-                    <div class="loop-results">
-                        <table class="script-table loop-table">
-                            <thead id="loop_results_header">
-                                <tr><th>ECID</th></tr>
-                            </thead>
-                            <tbody id="loop_results_body"></tbody>
-                        </table>
+                        <div class="loop-results">
+                            <table class="script-table loop-table">
+                                <thead id="loop_results_header">
+                                    <tr><th>ECID</th></tr>
+                                </thead>
+                                <tbody id="loop_results_body"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div id="toast_container" class="toast-container"></div>
-        </main>
+                <div id="toast_container" class="toast-container"></div>
+            </main>
+        </div>
     </div>
 
     <!-- Modal for adding script -->
