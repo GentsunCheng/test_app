@@ -47,11 +47,11 @@ def create_route(path, method):
             def generate():
                 try:
                     lines = example.split('\n')
-                    times = 10
+                    times = 5
                     for line in lines:
                         for _ in range(times):
                             yield f"{line}\n\n"
-                            time.sleep(0.1)
+                            time.sleep(0.25)
                 except (GeneratorExit, Exception):
                     # This happens when the client disconnects or aborts
                     print(f"Client disconnected from logs: {path}")
