@@ -735,7 +735,7 @@ export function filterMethods() {
     } else {
         const msg = document.getElementById('no_methods_msg');
         if (msg) msg.remove();
-        if (state.methodFocusIndex >= filteredMethods.length) state.methodFocusIndex = 0;
+        if (state.methodFocusIndex >= filteredMethods.length) state.methodFocusIndex = Math.max(0, filteredMethods.length - 1);
         if (state.methodFocusIndex < 0 && state.selectedMethod) {
             const idx = filteredMethods.indexOf(state.selectedMethod);
             state.methodFocusIndex = idx >= 0 ? idx : 0;
@@ -754,15 +754,15 @@ export function filterMethods() {
                 item.className = 'method-item';
                 item.dataset.method = method;
                 item.textContent = method;
-                item.onclick = () => {
-                    state.selectedMethod = method;
-                    state.methodFocusIndex = index;
-                    elements.btnMethodConfirm.disabled = false;
-                    filterMethods();
-                };
                 elements.methodListContainer.appendChild(item);
             }
-            if (item.className !== currentClassName) item.className = currentClassName;
+            item.className = currentClassName;
+            item.onclick = () => {
+                state.selectedMethod = method;
+                state.methodFocusIndex = index;
+                elements.btnMethodConfirm.disabled = false;
+                filterMethods();
+            };
             if (elements.methodListContainer.children[index] !== item) elements.methodListContainer.insertBefore(item, elements.methodListContainer.children[index]);
         });
         existingElements.forEach(el => {
