@@ -50,7 +50,7 @@ export function switchNavPage(page) {
         container.innerHTML = getTestPageHTML();
         refreshElements();
         initEventListeners();
-        state.currentView = 'test';
+        state.currentView = 'units';
         updateMainView();
         fetchScriptInfo(renderTestView);
     } else {
@@ -210,10 +210,18 @@ export function initEventListeners() {
 
     elements.btnHostAdd.onclick = async () => {
         const name = elements.newHostNameInput.value.trim();
-        const url = elements.newHostUrlInput.value.trim();
+        let url = elements.newHostUrlInput.value.trim();
         if (name && url) {
-            if (!url.startsWith('http')) {
+            if (!url.toLowerCase().startsWith('http')) {
                 showToast('URL must start with http:// or https://', 'error');
+                return;
+            }
+            // 标准化 URL，去掉尾部斜杠
+            try {
+                const parsed = new URL(url);
+                url = parsed.toString().replace(/\/+$/, '');
+            } catch {
+                showToast('Invalid URL format', 'error');
                 return;
             }
             state.hosts.push({ name, url });

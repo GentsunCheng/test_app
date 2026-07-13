@@ -3,12 +3,23 @@
 const defaultHost = window.location.hostname || 'localhost';
 const defaultHostUrl = `http://${defaultHost}:8196`;
 
+function normalizeUrl(raw) {
+    try {
+        const url = new URL(raw);
+        if (!url.hostname) throw new Error('empty hostname');
+        // 去掉尾部斜杠，确保 URL 比较一致
+        return url.toString().replace(/\/+$/, '');
+    } catch {
+        return null;
+    }
+}
+
 function sanitizeHost(host) {
     if (!host) return null;
-    try {
-        const url = new URL(host.url);
-        if (!url.hostname) throw new Error('empty hostname');
-    } catch {
+    const normalized = normalizeUrl(host.url);
+    if (normalized) {
+        host.url = normalized;
+    } else {
         host.url = defaultHostUrl;
     }
     return host;
