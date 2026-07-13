@@ -15,21 +15,33 @@ const toolState = {
 };
 
 let AVAILABLE_COMMANDS = [];
+let _fetchRetryCount = 0;
+const MAX_FETCH_RETRIES = 5;
 
 async function fetchAvailableCommands() {
-    try {
-        const response = await fetch(`${state.API_BASE}/api/get_cmd_list`);
-        const data = await response.json();
-        if (Array.isArray(data)) {
-            AVAILABLE_COMMANDS.length = 0;
-            AVAILABLE_COMMANDS.push(...data);
-            if (!AVAILABLE_COMMANDS.includes('discharge')) {
-                AVAILABLE_COMMANDS.push('discharge');
+    while (_fetchRetryCount < MAX_FETCH_RETRIES) {
+        try {
+            const response = await fetch(`${state.API_BASE}/api/get_cmd_list`);
+            const data = await response.json();
+            if (Array.isArray(data)) {
+                AVAILABLE_COMMANDS.length = 0;
+                AVAILABLE_COMMANDS.push(...data);
+                if (!AVAILABLE_COMMANDS.includes('discharge')) {
+                    AVAILABLE_COMMANDS.push('discharge');
+                }
+            }
+            _fetchRetryCount = 0;
+            return true;
+        } catch (error) {
+            _fetchRetryCount++;
+            console.error(`Error fetching available commands (${_fetchRetryCount}/${MAX_FETCH_RETRIES}):`, error);
+            if (_fetchRetryCount < MAX_FETCH_RETRIES) {
+                await new Promise(r => setTimeout(r, 1000));
             }
         }
-    } catch (error) {
-        console.error('Error fetching available commands:', error);
     }
+    _fetchRetryCount = 0;
+    return false;
 }
 
 export function refreshToolResults() {
@@ -53,12 +65,15 @@ export async function renderToolView() {
     }
 
     if (!toolState._initialized) {
-        await fetchAvailableCommands();
+        const ok = await fetchAvailableCommands();
+        toolState._initialized = ok;
+        if (!ok) {
+            showToast('Failed to load available commands after retries', 'error');
+        }
         setupCmdButtons();
         setupdischargeButton();
         setupLoopListDragDrop();
         setupLoopToggle();
-        toolState._initialized = true;
     }
     renderLoopList();
     renderLoopResults();
