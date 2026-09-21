@@ -4,8 +4,8 @@ from pathlib import Path
 import web_server
 
 
-__VERSION__ = "2605a"
-__RESOURCE_VERSION__ = "2605v1"
+__VERSION__ = "2610a"
+__RESOURCE_VERSION__ = "2610v1"
 
 
 def smart_extract(zip_path: Path, base_output_dir: Path) -> None:

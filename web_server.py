@@ -187,7 +187,7 @@ class Management:
             if not test_method or not units:
                 return jsonify({'status': 'error', 'message': 'No test method provided'}), 400
             else:
-                detail_info = self.units_detector.get_detail_info(self.test_scripts.get_testing_ecids(), units, True)
+                detail_info = self.units_detector.get_detail_info(self.test_scripts.get_testing_ecids(), units)
                 run_result, msg = self.test_scripts.run_test_script(test_method, script_name, detail_info)
                 if not run_result:
                     return jsonify({'status': 'error', 'message': msg}), 400

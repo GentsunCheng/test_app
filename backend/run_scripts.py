@@ -12,6 +12,7 @@ import tempfile
 import openpyxl
 import openpyxl.utils
 import openpyxl.styles
+import unicodedata
 import threading
 import subprocess as sp
 from art import text2art
@@ -26,8 +27,17 @@ from backend.utils import logger_debug
 __IS_ALIVE__ = True
 
 __SPECIAL_CMD__ = MappingProxyType({
-    "results": ["python3", "host_ssh_script.py", "--results"],
-    "brownout": ["python3", "host_ssh_script.py", "--test", "brownout", "--serial_test"]
+    "收集数据": ["python3", "host_ssh_script.py", "--results"],
+})
+
+__COMMON_CMD__ = MappingProxyType({
+    "brownout": ["python3", "host_ssh_script.py", "--test", "brownout", "--serial_test"],
+    "e85victimrf1": ["python3", "host_ssh_script.py", "--test", "e85victimrf1", "--serial_test"],
+    "e85victimrf2": ["python3", "host_ssh_script.py", "--test", "e85victimrf2", "--serial_test"],
+    "e85victimnorf": ["python3", "host_ssh_script.py", "--test", "e85victimnorf", "--serial_test"],
+    "e85sensors": ["python3", "host_ssh_script.py", "--test", "e85sensors", "--serial_test"],
+    "e85ttw": ["python3", "host_ssh_script.py", "--test", "e85ttw", "--serial_test"],
+    "e85camera": ["python3", "host_ssh_script.py", "--test", "e85camera", "--serial_test"],
 })
 
 
@@ -93,10 +103,25 @@ def scan_local_script() -> Dict:
     return script_path_dict
 
 
+def _is_chinese(char):
+    return 'CJK' in unicodedata.name(char)
+
+
+def sort_key(s):
+    has_chinese = any(_is_chinese(c) for c in s)
+    return (0, s) if has_chinese else (1, s)
+
+
 def __get_cmd__(test_method: str, ecid: str) -> List[str]:
     test_method_split = test_method.split()
-    __COMMON_CMD__ = ["python3", "host_ssh_script.py", "--test"] + test_method_split
-    return __SPECIAL_CMD__.get(test_method, __COMMON_CMD__) + ["--ecid", ecid]
+    __DEFAULT_CMD__ = ["python3", "host_ssh_script.py", "--test"] + test_method_split
+    special_cmd = __SPECIAL_CMD__.get(test_method, None)
+    common_cmd = __COMMON_CMD__.get(test_method, None)
+    if special_cmd:
+        return special_cmd + ["--ecid", ecid]
+    if common_cmd:
+        return common_cmd + ["--ecid", ecid]
+    return __DEFAULT_CMD__ + ["--ecid", ecid]
 
 
 def log_message(base_path: Path, test_method: str, message: str):
@@ -115,13 +140,13 @@ def log_message(base_path: Path, test_method: str, message: str):
         logs_dir = base_path.joinpath("logs")
         archive_dir = base_path.joinpath("logs", "archive")
         archive_dir.mkdir(parents=True, exist_ok=True)
-        three_days_ago = datetime.datetime.now() - datetime.timedelta(days=3)
+        one_day_ago = datetime.datetime.now() - datetime.timedelta(days=1)
         log_by_date = {}
         for log_file in logs_dir.glob("*.log"):
             if log_file.name == "archive":
                 continue
             file_mtime = datetime.datetime.fromtimestamp(log_file.stat().st_mtime)
-            if file_mtime < three_days_ago:
+            if file_mtime < one_day_ago:
                 date_str = file_mtime.strftime("%Y-%m-%d")
                 if date_str not in log_by_date:
                     log_by_date[date_str] = []
@@ -134,15 +159,16 @@ def log_message(base_path: Path, test_method: str, message: str):
                     zipf.write(file, arcname=file.name)
             for file in files:
                 file.unlink(missing_ok=True)
-        three_months_ago = datetime.datetime.now() - datetime.timedelta(days=90)
+        three_days_ago = datetime.datetime.now() - datetime.timedelta(days=3)
         for log_file in logs_dir.glob("*.log"):
             file_mtime = datetime.datetime.fromtimestamp(log_file.stat().st_mtime)
-            if file_mtime < three_months_ago:
+            if file_mtime < three_days_ago:
                 log_file.unlink(missing_ok=True)
         for archive_file in archive_dir.glob("*.zip"):
             file_mtime = datetime.datetime.fromtimestamp(archive_file.stat().st_mtime)
-            if file_mtime < three_months_ago:
+            if file_mtime < three_days_ago:
                 archive_file.unlink(missing_ok=True)
+
     archive_and_cleanup_old_logs()
 
 
@@ -292,18 +318,45 @@ class TestScript:
             return False, []
         if not Path(script_base).exists() or not Path(script_base).is_dir():
             return False, []
-        methods_config = script_base.joinpath("methods.json")
         test_app_path = script_base.joinpath("TestApp")
+        test_shortcut_path = script_base.joinpath("test_app")
+        methods_config = script_base.joinpath("methods.json")
+        test_shortcut_json = test_shortcut_path.joinpath(".testshortcut.json")
+        useless_files = (".DS_Store", ".Trash", ".Trashes", ".fseventsd", ".testshortcut.json", "logs")
         if methods_config.exists():
-            with open(methods_config, "r") as f:
-                methods = json.load(f)
-                return True, methods
+            try:
+                with open(methods_config, "r") as f:
+                    content = json.load(f)
+                    methods = content.get("test_methods", [])
+                    if methods:
+                        return True, methods
+            except json.JSONDecodeError:
+                print("methods_config file invalid")
+        if test_shortcut_json.exists():
+            try:
+                with open(test_shortcut_json, "r") as f:
+                    content = json.load(f)
+                    items = content.get("test_items", [])
+                    custom_items = list(content.get("custom_items", {}).keys())
+                    all_items = items + custom_items
+                    all_items.sort(key=sort_key)
+                    if all_items:
+                        return True, all_items
+            except json.JSONDecodeError:
+                print("test_shortcut_json file invalid")
+        if test_shortcut_path.exists():
+            files = [f.name.lower() for f in test_shortcut_path.iterdir() if f.name not in useless_files]
+            files.sort(key=sort_key)
+            return True, files
         elif test_app_path.exists():
-            files = [f.name for f in test_app_path.iterdir()]
-            files.remove("收集数据")
-            files = [s.lower() for s in files]
-            files.append("results")
-            files.sort()
+            files = [f.name.lower() for f in test_app_path.iterdir() if f.name not in useless_files]
+            files_tmp = copy.deepcopy(files)
+            for file in files_tmp:
+                if "arcas" in file:
+                    files.remove(file)
+                    new_item = '_'.join(list(reversed(file.split("_"))))
+                    files.append(new_item)
+            files.sort(key=sort_key)
             return True, files
         else:
             return True, []
@@ -313,7 +366,8 @@ class TestScript:
             desktop = Path().home().joinpath("Desktop")
             patterns = [
                 '*_*_Factory',
-                'DOE'
+                'DOE',
+                'PRQ_*'
             ]
             found_scripts = []
             for pattern in patterns:
@@ -445,6 +499,8 @@ class TestScript:
         if test_method == "results":
             self.__testing_data_size__.update({ecid: data.get("data_size", "0K") for ecid, data in units.items()})
             if not self.__adjust_space__():
+                for ecid in units.keys():
+                    self.__testing_data_size__.pop(ecid)
                 return False, "Space not enough"
         order = -1
         for ecid, data in units.items():
@@ -484,24 +540,16 @@ class TestScript:
 
     @logger_debug
     def __adjust_space__(self) -> bool:
-        retain_scale = 0.5
+        retain_scale = 0.2
         retain_space = 2 * 1024
         total, used, free = shutil.disk_usage("/")
-        host_size_str = f"{free // (1024**3)}G"
-        if host_size_str.endswith("T"):
-            host_size = float(host_size_str[:-1]) * 1024**2
-        elif host_size_str.endswith("G"):
-            host_size = float(host_size_str[:-1]) * 1024
-        elif host_size_str.endswith("M"):
-            host_size = float(host_size_str[:-1])
-        else:
+        host_size = free // (1024 * 1024)
+        if host_size <= 2 * 1024:
             return False
-        if host_size == 0:
-            return True
         all_data_size = 0
-        for _, data_size_str in self.__testing_data_size__.items():
+        for ecid, data_size_str in self.__testing_data_size__.items():
             if data_size_str.endswith("T"):
-                data_size = float(data_size_str[:-1]) * 1024**2
+                data_size = float(data_size_str[:-1]) * 1024 ** 2
             elif data_size_str.endswith("G"):
                 data_size = float(data_size_str[:-1]) * 1024
             elif data_size_str.endswith("M"):
@@ -513,17 +561,6 @@ class TestScript:
             return False
         else:
             return True
-
-    @staticmethod
-    def __pre_process_test_method__(test_method: str) -> Tuple[bool, str]:
-        if '_' not in test_method:
-            return True, test_method
-        test_method_split = test_method.split('_')
-        if "arcas" in test_method_split[-1]:
-            test_method = ' '.join(list(reversed(test_method_split)))
-        else:
-            return False, "No Matched"
-        return True, test_method
 
     def __run_process__(self, test_method: str, ecid: str, log_buffer: io.BytesIO, script_name: str,
                         info: dict) -> bool:
@@ -546,14 +583,13 @@ class TestScript:
         log_buffer.write(b"\n")
         if methods and test_method not in methods:
             return False
-        process_ok, data = self.__pre_process_test_method__(test_method)
-        if not process_ok:
-            return False
-        test_method = data
+        test_method = test_method.replace('_', ' ')
         cmd = __get_cmd__(test_method, ecid)
         if not cmd:
             return False
-        if str(workdir) != str(script_dir) and test_method not in __SPECIAL_CMD__.keys():
+        if str(workdir) != str(script_dir) and (
+            test_method not in __COMMON_CMD__.keys() or 
+            test_method not in __SPECIAL_CMD__.keys()):
             shutil.copytree(
                 script_dir,
                 workdir,
@@ -563,14 +599,21 @@ class TestScript:
         else:
             workdir = script_dir
         time.sleep(abs(order * 0.15))
+        record_terminal_log = False
+        if test_method in __COMMON_CMD__.keys():
+            record_terminal_log = True
+        terminal_log_buffer = open(Path(workdir).joinpath("terminal.log"), "w")
         process = sp.Popen(
             cmd,
             stdout=sp.PIPE,
-            stderr=sp.PIPE,
+            stderr=sp.STDOUT,
             cwd=workdir,
         )
         self.__testing_dict__[ecid]["process"] = process
         for line in process.stdout:
+            if record_terminal_log:
+                terminal_log_buffer.write(line.decode(encoding="utf-8"))
+                terminal_log_buffer.flush()
             log_buffer.write(line)
             if not self.__running__:
                 break
@@ -581,6 +624,7 @@ class TestScript:
         if process.returncode == 0:
             info[ecid]["sync_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             info_queue.put(info)
+        terminal_log_buffer.close()
         return True
 
     def __test_lifetime_detector__(self):
@@ -601,8 +645,7 @@ class TestScript:
                     else:
                         __removable_ecids__.append(ecid)
                 for ecid in self.__testing_data_size__.keys():
-                    data = self.__testing_dict__.get(ecid, {})
-                    thread = data.get("thread", None)
+                    thread = self.__testing_dict__.get(ecid, {}).get("thread", None)
                     if isinstance(thread, threading.Thread):
                         if not thread.is_alive():
                             __removable_ecids__.append(ecid)
@@ -610,9 +653,11 @@ class TestScript:
                         __removable_ecids__.append(ecid)
                 __removable_ecids__ = list(set(__removable_ecids__))
                 for removable_ecid in __removable_ecids__:
-                    log_level = self.__testing_dict__.get(removable_ecid, {}).get("test_status", {}).get("log_level", None)
+                    log_level = self.__testing_dict__.get(removable_ecid, {}).get("test_status", {}).get("log_level",
+                                                                                                         None)
                     log_stream = self.__testing_dict__.get(removable_ecid, {}).get("log_stream", None)
-                    test_method = self.__testing_dict__.get(removable_ecid, {}).get("test_status", {}).get("test_method", None)
+                    test_method = self.__testing_dict__.get(removable_ecid, {}).get("test_status", {}).get(
+                        "test_method", None)
                     workdir = self.__testing_dict__.get(removable_ecid, {}).get("workdir", None)
                     if Path(workdir).is_dir():
                         try:
