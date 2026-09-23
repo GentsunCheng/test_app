@@ -2,7 +2,6 @@ import os
 import re
 import threading
 import time
-import copy
 import socket
 import random
 import pexpect
