@@ -293,7 +293,14 @@ class Detector:
                     if not future.result():
                         removable_process_ecids.append(futures[future])
         for ecid in removable_process_ecids:
-            self.__process_dict__.pop(ecid, None)
+            data = self.__process_dict__.pop(ecid, None)
+            if data:
+                ssh = data.get("ssh", None)
+                if ssh:
+                    try:
+                        ssh.close()
+                    except Exception:
+                        pass
         for ecid in removable_info_ecids:
             self.__detail_info__.pop(ecid, None)
 
@@ -324,27 +331,38 @@ class Detector:
                          '--autoexit', '--quiet'])
                     self.__process_dict__[ecid]["port"] = port
 
-    def __remote_ssh_cmd__(self, port: int, command: dict) -> dict:
+    @staticmethod
+    def __is_ssh_alive__(ssh) -> bool:
+        if ssh is None:
+            return False
+        transport = ssh.get_transport()
+        return transport is not None and transport.is_active()
+
+    def __remote_ssh_cmd__(self, data: dict, command: dict) -> dict:
         results = {}
-        try:
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(
-                hostname='localhost',
-                port=port,
-                username='root',
-                key_filename=f'{self.__ssh_path__}/id_ecdsa',
-                timeout=1,
-                compress=True
-            )
-        except paramiko.SSHException as _e:
-            print(f"SSH execute failed, port: {port}")
-            return {"status": False, "msg": "SSH execute failed"}
-        for remark, data in command.items():
+        port = data.get("port", None)
+        ssh = data.get("ssh", None)
+        if not self.__is_ssh_alive__(ssh):
+            try:
+                ssh = paramiko.SSHClient()
+                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                ssh.connect(
+                    hostname='localhost',
+                    port=port,
+                    username='root',
+                    key_filename=f'{self.__ssh_path__}/id_ecdsa',
+                    timeout=1,
+                    compress=True
+                )
+                data["ssh"] = ssh
+            except paramiko.SSHException as _e:
+                print(f"SSH execute failed, port: {port}")
+                return {"status": False, "msg": "SSH execute failed"}
+        for remark, item in command.items():
             results[remark] = {}
-            cmd = data.get("cmd", None)
-            output = data.get("output", True)
-            pattern = data.get("pattern", None)
+            cmd = item.get("cmd", None)
+            output = item.get("output", True)
+            pattern = item.get("pattern", None)
             if not cmd:
                 continue
             stdin, stdout, stderr = ssh.exec_command(cmd)
@@ -362,7 +380,6 @@ class Detector:
                 else:
                     results[remark]["status"] = False
                     results[remark]["output"] = stderr_output.strip().splitlines()
-        ssh.close()
         return results
 
     def __fetch_info__(self, ecid: str, data: dict, ecids, more_info) -> Union[dict, None]:
@@ -377,7 +394,7 @@ class Detector:
             timestamp = time.time()
             print(f"[{datetime.fromtimestamp(timestamp).strftime('%Y-%m-%dT%H:%M:%S')}] Unit {ecid} getting static info")
             __detail_info__[ecid]["check_timestamp"] = int(timestamp)
-            results = self.__remote_ssh_cmd__(port, __STATIC_COMMAND__)
+            results = self.__remote_ssh_cmd__(data, __STATIC_COMMAND__)
             sw_version = results.get("sw_version", {}).get("output", None)
             serial_number = results.get("serial_number", {}).get("output", None)
             battery = results.get("battery", {}).get("output", None)
@@ -423,7 +440,7 @@ class Detector:
         else:
             if int(time.time()) - self.__detail_info__.get(ecid, {}).get("check_timestamp", int(time.time())) > 10:
                 __detail_info__[ecid]["check_timestamp"] = int(time.time())
-                results = self.__remote_ssh_cmd__(port, __DYNAMIC_COMMAND__)
+                results = self.__remote_ssh_cmd__(data, __DYNAMIC_COMMAND__)
                 battery = results["battery"]["output"]
                 temperature = results["temperature"]["output"]
                 data_size_str = results["data_size_str"]["output"]
@@ -483,7 +500,8 @@ class UnitServer(Detector):
         super().__init__()
         self.__base_path__ = base_path
 
-    def __rsync_core__(self, port: int, source: str, target: str) -> Tuple[bool, str]:
+    def __rsync_core__(self, data: dict, source: str, target: str) -> Tuple[bool, str]:
+        port = data.get("port", None)
         rsync_cmd = [
             "rsync",
             "-avcz",
@@ -513,14 +531,14 @@ class UnitServer(Detector):
                     ["copyUnrestricted", "-w", "-u", location_id, "-s", str(discharge_resources), "-t", "/var/root"])
                 pushed_ecids.append(ecid)
         for ecid in pushed_ecids:
-            port = self.__process_dict__.get(ecid, {}).get("port", None)
-            if port:
+            data = self.__process_dict__.get(ecid, {})
+            if data.get("port"):
                 command = (
                     f'cd /var/root/{discharge_resources_file_name} ; '
                     'chmod +x unit_batterydischarge.sh ; '
                     f'screen -S batterydischarge -s /bin/zsh -d -m ./unit_batterydischarge.sh {target_power}'
                 )
-                self.__remote_ssh_cmd__(port, {"sw_version": {
+                self.__remote_ssh_cmd__(data, {"sw_version": {
                     "cmd": command,
                     "output": False
                 }})
@@ -536,10 +554,10 @@ class UnitServer(Detector):
         self.get_detail_info([], None)
         success_ecids = []
         for ecid in ecids:
-            port = self.__process_dict__.get(ecid, {}).get("port", None)
-            if port:
+            data = self.__process_dict__.get(ecid, {})
+            if data.get("port"):
                 command = " ; ".join(__CMD_MAP__.get(cmd, (cmd,)))
-                self.__remote_ssh_cmd__(port, {"sw_version": {
+                self.__remote_ssh_cmd__(data, {"sw_version": {
                     "cmd": command,
                     "output": False
                 }})
@@ -559,11 +577,12 @@ class UnitServer(Detector):
                                                         Tuple[bool, str]]
                                                 ] | bool:
         self.get_detail_info([], None)
-        port = self.__process_dict__.get(ecid, {}).get("port", None)
+        data = self.__process_dict__.get(ecid, {})
+        port = data.get("port", None)
         unit_temp_path = None
         if port:
             command = "mktemp -d"
-            mktmp_result, mktmp_output = self.__remote_ssh_cmd__(port, {"sw_version": {"cmd": command}})
+            mktmp_result, mktmp_output = self.__remote_ssh_cmd__(data, {"sw_version": {"cmd": command}})
             if not mktmp_result:
                 return False
             unit_temp_path = safe_get(mktmp_output, 0, None).strip()
@@ -572,7 +591,7 @@ class UnitServer(Detector):
         shasum_tool = self.__base_path__.joinpath("unit_tools/shasum.py")
         unit_shasum_path = None
         _unit_shasum_path = "/var/root/shasum_tool"
-        rsync_result, _ = self.__rsync_core__(port, str(shasum_tool), f"root@localhost:{_unit_shasum_path}")
+        rsync_result, _ = self.__rsync_core__(data, str(shasum_tool), f"root@localhost:{_unit_shasum_path}")
         if rsync_result:
             unit_shasum_path = _unit_shasum_path
 
@@ -584,11 +603,11 @@ class UnitServer(Detector):
             if not Path(file_part).exists():
                 return False, 409, f"File {file_part} does not exist"
             target_file = Path(unit_temp_path) / Path(file_part).name
-            result, _ = self.__rsync_core__(port, file_part, f"root@localhost:{target_file}")
+            result, _ = self.__rsync_core__(data, file_part, f"root@localhost:{target_file}")
             if result:
                 if unit_shasum_path and sha_value:
                     shasum_cmd = f'python3 {unit_shasum_path} {sha_option} {target_file}'
-                    sha_result, sha_output = self.__remote_ssh_cmd__(port, {"sw_version": {"cmd": shasum_cmd}})
+                    sha_result, sha_output = self.__remote_ssh_cmd__(data, {"sw_version": {"cmd": shasum_cmd}})
                     if not sha_result:
                         return False, 400, "Failed to run shasum"
                     sha_result = safe_get(sha_output, 0, None).strip()
@@ -600,16 +619,16 @@ class UnitServer(Detector):
                   sha_value: str = "",
                   sha_option: Literal["sha1", "sha224", "sha256", "sha384", "sha512"] = "sha1"
                   ) -> Tuple[bool, str]:
-            nonlocal port, unit_temp_path, unit_shasum_path
+            nonlocal unit_temp_path, unit_shasum_path
             merge_command = (
                 f'cd {unit_temp_path} ; '
                 f'ls part_* | sort -V | xargs cat > {target_path} ; '
                 f'ls {target_path}'
             )
-            output = self.__remote_ssh_cmd__(port, {"sw_version": {"cmd": merge_command}})
+            output = self.__remote_ssh_cmd__(data, {"sw_version": {"cmd": merge_command}})
             if unit_shasum_path and sha_value:
                 shasum_cmd = f'python3 {unit_shasum_path} {sha_option} {target_path}'
-                sha_result, sha_output = self.__remote_ssh_cmd__(port, {"sw_version": {"cmd": shasum_cmd}})
+                sha_result, sha_output = self.__remote_ssh_cmd__(data, {"sw_version": {"cmd": shasum_cmd}})
                 sha_result = safe_get(sha_output, 0, None).strip()
                 if sha_result != sha_value:
                     return False, "Sha result mismatch"
@@ -623,11 +642,12 @@ class UnitServer(Detector):
     def download_file_from_unit(self, ecid: str, file_path: str | Path) -> Generator[
             Tuple[bool, str], Any, Tuple[bool, str]]:
         self.get_detail_info([], None)
-        port = self.__process_dict__.get(ecid, {}).get("port", None)
+        data = self.__process_dict__.get(ecid, {})
+        port = data.get("port", None)
         unit_temp_path = None
         if port:
             command = "mktemp -d"
-            mktmp_result, mktmp_output = self.__remote_ssh_cmd__(port, {"sw_version": {"cmd": command}})
+            mktmp_result, mktmp_output = self.__remote_ssh_cmd__(data, {"sw_version": {"cmd": command}})
             if not mktmp_result:
                 return False, "Failed to mktmp"
             unit_temp_path = safe_get(mktmp_output, 0, None).strip()
@@ -636,19 +656,19 @@ class UnitServer(Detector):
         shasum_tool = self.__base_path__.joinpath("unit_tools/shasum.py")
         # unit_shasum_path = None
         _unit_shasum_path = "/var/root/shasum_tool"
-        rsync_result, _ = self.__rsync_core__(port, str(shasum_tool), f"root@localhost:{_unit_shasum_path}")
+        rsync_result, _ = self.__rsync_core__(data, str(shasum_tool), f"root@localhost:{_unit_shasum_path}")
         # if rsync_result:
         #     unit_shasum_path = _unit_shasum_path
         split_cmd = f"split -b 1M {file_path} {unit_temp_path}/part_"
-        self.__remote_ssh_cmd__(port, {"sw_version": {"cmd": split_cmd}})
-        split_result, split_files = self.__remote_ssh_cmd__(port, {"sw_version": {"cmd": f"ls {unit_temp_path}/part_*"}})
+        self.__remote_ssh_cmd__(data, {"sw_version": {"cmd": split_cmd}})
+        split_result, split_files = self.__remote_ssh_cmd__(data, {"sw_version": {"cmd": f"ls {unit_temp_path}/part_*"}})
         if not split_result:
             return False, "Failed to split file"
         local_tmp = tempfile.mkdtemp()
         for file in split_files:
             rsync_result = False
             for _ in range(10):
-                rsync_result, _ = self.__rsync_core__(port, f"root@localhost:{unit_temp_path}/{file}", local_tmp)
+                rsync_result, _ = self.__rsync_core__(data, f"root@localhost:{unit_temp_path}/{file}", local_tmp)
                 if rsync_result:
                     break
             if not rsync_result:
