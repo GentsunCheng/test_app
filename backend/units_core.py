@@ -129,7 +129,7 @@ def is_port_available(port: int) -> bool:
             return False
 
 
-def check_ssh_connection(hostname, port=22, timeout=3):
+def check_ssh_connection(hostname, port=22, timeout=0.5):
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
@@ -273,19 +273,26 @@ class Detector:
 
     def __process_dict_lifetime__(self) -> None:
         ecids = self.get_ecids()
+        removable_info_ecids = [ecid for ecid in self.__process_dict__ if ecid not in ecids]
+        check_items = [
+            (ecid, data.get("port"))
+            for ecid, data in self.__process_dict__.items()
+            if data.get("port") is not None
+        ]
         removable_process_ecids = []
-        removable_info_ecids = []
-        for ecid, data in self.__process_dict__.items():
-            if ecid not in ecids:
-                removable_info_ecids.append(ecid)
-            port = data.get("port", None)
-            if port is not None:
-                if not check_ssh_connection("127.0.0.1", port):
-                    removable_process_ecids.append(ecid)
-        for removable_process_ecid in removable_process_ecids:
-            self.__process_dict__.pop(removable_process_ecid, None)
-        for removable_info_ecid in removable_info_ecids:
-            self.__detail_info__.pop(removable_info_ecid, None)
+        if check_items:
+            with ThreadPoolExecutor(max_workers=16) as executor:
+                futures = {
+                    executor.submit(check_ssh_connection, "127.0.0.1", port): ecid
+                    for ecid, port in check_items
+                }
+                for future in as_completed(futures):
+                    if not future.result():
+                        removable_process_ecids.append(futures[future])
+        for ecid in removable_process_ecids:
+            self.__process_dict__.pop(ecid, None)
+        for ecid in removable_info_ecids:
+            self.__detail_info__.pop(ecid, None)
 
     @staticmethod
     def __run_cmd__(cmd: list[str]) -> sp.Popen:
@@ -304,7 +311,6 @@ class Detector:
             location_id = data["loc"]
             if not self.__process_dict__.get(ecid, None):
                 self.__process_dict__[ecid] = {}
-                self.__ssh_path__ = gen_ssh_key()
                 self.__run_cmd__(
                     ["copyUnrestricted", "-w", "-u", location_id, "-s", str(self.__ssh_path__), "-t", "/var/root"])
                 if not self.__process_dict__.get(ecid, {}).get("tcprelay", None):
@@ -450,9 +456,9 @@ class Detector:
                                 self.__detail_info__[ecid][data_key] = data_value
         self.__process_dict_lifetime__()
         if isinstance(ecids, list) and ecids:
-            return {ecid: data for ecid, data in self.__detail_info__.items() if ecid in ecids}
+            return {ecid: dict(data) for ecid, data in self.__detail_info__.items() if ecid in ecids}
         else:
-            return copy.deepcopy(self.__detail_info__)
+            return {ecid: dict(data) for ecid, data in self.__detail_info__.items()}
 
 
 class UnitServer(Detector):
