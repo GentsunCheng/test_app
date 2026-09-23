@@ -14,7 +14,7 @@ from pathlib import Path
 import tempfile
 import traceback
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from typing import Callable, Generator, Tuple, Union, Any, Literal, TypeAlias, get_args
 from types import MappingProxyType
 
@@ -205,6 +205,8 @@ class Detector:
         self.__detail_info__ = {}
         self.__ssh_path__ = gen_ssh_key()
         self.__process_external_data_thread__ = None
+        self.__detail_lock__ = threading.Lock()
+        self.__executor__ = ThreadPoolExecutor(max_workers=16)
 
     def __detector__(self) -> None:
         __remove_ecids__ = []
@@ -261,6 +263,7 @@ class Detector:
             data.get("tcprelay", sp.Popen(['echo'])).terminate()
         self.__processing__ = None
         self.__running__ = False
+        self.__executor__.shutdown(wait=False)
 
     def get_ecids(self, full: bool = False) -> dict | list:
         data = {} if full else []
@@ -419,7 +422,7 @@ class Detector:
                 pass
         else:
             if int(time.time()) - self.__detail_info__.get(ecid, {}).get("check_timestamp", int(time.time())) > 10:
-                self.__detail_info__[ecid]["check_timestamp"] = int(time.time())
+                __detail_info__[ecid]["check_timestamp"] = int(time.time())
                 results = self.__remote_ssh_cmd__(port, __DYNAMIC_COMMAND__)
                 battery = results["battery"]["output"]
                 temperature = results["temperature"]["output"]
@@ -436,29 +439,43 @@ class Detector:
                     pass
         return __detail_info__
 
-    def get_detail_info(self, running_ecids: list[str], ecids=None, more_info=False) -> dict:
+    def __on_fetch_done__(self, future) -> None:
+        try:
+            result = future.result()
+        except Exception:
+            return
+        if not isinstance(result, dict):
+            return
+        with self.__detail_lock__:
+            for ecid, data in result.items():
+                if not self.__detail_info__.get(ecid, None):
+                    self.__detail_info__[ecid] = data
+                else:
+                    for data_key, data_value in data.items():
+                        self.__detail_info__[ecid][data_key] = data_value
+
+    def get_detail_info(self, running_ecids: list[str], ecids=None, more_info=False,
+                        wait_timeout: float = 2.0) -> dict:
         ser_ecids = self.get_ecids(full=True)
         allowed_ser_ecids = {ecid: data for ecid, data in ser_ecids.items() if ecid not in running_ecids}
         self.__process_dict_lifetime__()
         self.__gen_conn__(allowed_ser_ecids)
-        with ThreadPoolExecutor(max_workers=16) as executor:
-            features = [executor.submit(self.__fetch_info__, ecid, data, ecids, more_info)
-                        for ecid, data in self.__process_dict__.items()
-                        if ecid not in running_ecids]
-            for future in as_completed(features):
-                result = future.result()
-                if isinstance(result, dict):
-                    for ecid, data in result.items():
-                        if not self.__detail_info__.get(ecid, None):
-                            self.__detail_info__[ecid] = data
-                        else:
-                            for data_key, data_value in data.items():
-                                self.__detail_info__[ecid][data_key] = data_value
-        self.__process_dict_lifetime__()
-        if isinstance(ecids, list) and ecids:
-            return {ecid: dict(data) for ecid, data in self.__detail_info__.items() if ecid in ecids}
-        else:
-            return {ecid: dict(data) for ecid, data in self.__detail_info__.items()}
+        futures = [
+            self.__executor__.submit(self.__fetch_info__, ecid, data, ecids, more_info)
+            for ecid, data in self.__process_dict__.items()
+            if ecid not in running_ecids
+        ]
+        for future in futures:
+            future.add_done_callback(self.__on_fetch_done__)
+        if futures and wait_timeout is not None and wait_timeout > 0:
+            wait(futures, timeout=wait_timeout)
+        # 连接清理放到后台，避免阻塞本次返回
+        threading.Thread(target=self.__process_dict_lifetime__, daemon=True).start()
+        with self.__detail_lock__:
+            if isinstance(ecids, list) and ecids:
+                return {ecid: dict(data) for ecid, data in self.__detail_info__.items() if ecid in ecids}
+            else:
+                return {ecid: dict(data) for ecid, data in self.__detail_info__.items()}
 
 
 class UnitServer(Detector):
