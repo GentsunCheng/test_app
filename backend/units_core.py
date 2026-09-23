@@ -13,7 +13,9 @@ import shutil
 from pathlib import Path
 import tempfile
 import traceback
-from typing import Callable, Generator, Tuple, Any, Literal, TypeAlias, get_args
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Callable, Generator, Tuple, Union, Any, Literal, TypeAlias, get_args
 from types import MappingProxyType
 
 __CG_VENDOR_MAP__ = MappingProxyType({
@@ -58,6 +60,41 @@ __CMD_MAP__ = MappingProxyType({
         "SignageTool set -text 'renew complete' -textSize 100 -textColor black -backgroundColor white",
     )
 })
+
+__STATIC_COMMAND__ = {
+    "sw_version": {
+        "cmd": "sw_vers --buildVersion",
+    }, "serial_number": {
+        "cmd": "gestalt_query SerialNumber",
+        "pattern": r'SerialNumber:\s*"([^"]+)"',
+    }, "battery": {
+        "cmd": "smcif -kd BRSC",
+    }, "temperature": {
+        "cmd": "smcif -kd TG0V",
+    }, "llm_packs": {
+        "cmd": "darwinup list",
+        "pattern": r"^LLM.*\.tar\.gz$"
+    }, "data_size_str": {
+        "cmd": "du -h -d=1 results"
+    }, "configs": {
+        "cmd": "sysconfig read -r -k 'CFG#'"
+    }, "vendor_str": {
+        "cmd": "powerswitch lcd on ; "
+               "displayPort -edp -auxFilter 0 ; "
+               "displayPort -edp -wdpcd 0x4e0 2 0xb1 0x00 ; "
+               "displayPort -edp -rdpcd 0x4f1 1 | cut -d ' ' -f 2"
+    }
+}
+
+__DYNAMIC_COMMAND__ = {
+    "battery": {
+        "cmd": "smcif -kd BRSC",
+    }, "temperature": {
+        "cmd": "smcif -kd TG0V",
+    }, "data_size_str": {
+        "cmd": "du -h -d=1 results"
+    }
+}
 
 __SSH_ERR_MSGS__ = MappingProxyType({
     1: "SSH Error: Permission denied",
@@ -231,8 +268,7 @@ class Detector:
             if full:
                 data = {k: v for k, v in self.__ecids__.items() if k and v}
             else:
-                data_before = list(self.__ecids__.keys())
-                data = list({item for item in data_before if item})
+                data = [k for k in self.__ecids__.keys() if k]
         return data
 
     def __process_dict_lifetime__(self) -> None:
@@ -279,7 +315,8 @@ class Detector:
                          '--autoexit', '--quiet'])
                     self.__process_dict__[ecid]["port"] = port
 
-    def __remote_ssh_cmd__(self, port: int, cmd: str, output: bool = True, pattern: str = "") -> Tuple[bool, list[str]]:
+    def __remote_ssh_cmd__(self, port: int, command: dict) -> dict:
+        results = {}
         try:
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -288,104 +325,129 @@ class Detector:
                 port=port,
                 username='root',
                 key_filename=f'{self.__ssh_path__}/id_ecdsa',
-                timeout=10
+                timeout=1,
+                compress=True
             )
         except paramiko.SSHException as _e:
             print(f"SSH execute failed, port: {port}")
-            return True, [""]
-        stdin, stdout, stderr = ssh.exec_command(cmd)
-        exit_code = stdout.channel.recv_exit_status()
-        ssh.close()
-        if output:
-            if exit_code == 0:
-                output = re.sub(rf'{re.escape(cmd)}\r\n?', '', stdout.read().decode('utf-8').strip())
-                if pattern:
-                    results = re.findall(pattern, output)
+            return {"status": False, "msg": "SSH execute failed"}
+        for remark, data in command.items():
+            results[remark] = {}
+            cmd = data.get("cmd", None)
+            output = data.get("output", True)
+            pattern = data.get("pattern", None)
+            if not cmd:
+                continue
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            std_output = stdout.read().decode('utf-8')
+            stderr_output = stderr.read().decode('utf-8')
+            exit_code = stdout.channel.recv_exit_status()
+            if output:
+                if exit_code == 0:
+                    results[remark]["status"] = True
+                    output = re.sub(rf'{re.escape(cmd)}\r\n?', '', std_output.strip())
+                    if pattern:
+                        results[remark]["output"] = re.findall(pattern, output)
+                    else:
+                        results[remark]["output"] = output.splitlines()
                 else:
-                    results = output.splitlines()
-                return True, results
+                    results[remark]["status"] = False
+                    results[remark]["output"] = stderr_output.strip().splitlines()
+        ssh.close()
+        return results
+
+    def __fetch_info__(self, ecid: str, data: dict, ecids, more_info) -> Union[dict, None]:
+        __detail_info__ = {ecid: {}}
+        if isinstance(ecids, list) and ecid not in ecids:
+            return None
+        port = data.get("port", None)
+        if not isinstance(port, int):
+            return None
+        if (not self.__detail_info__.get(ecid, None) or
+                not self.__detail_info__.get(ecid, None).get("static_info", False)):
+            timestamp = time.time()
+            print(f"[{datetime.fromtimestamp(timestamp).strftime('%Y-%m-%dT%H:%M:%S')}] Unit {ecid} getting static info")
+            __detail_info__[ecid]["check_timestamp"] = int(timestamp)
+            results = self.__remote_ssh_cmd__(port, __STATIC_COMMAND__)
+            sw_version = results.get("sw_version", {}).get("output", None)
+            serial_number = results.get("serial_number", {}).get("output", None)
+            battery = results.get("battery", {}).get("output", None)
+            temperature = results.get("temperature", {}).get("output", None)
+            llm_packs = results.get("llm_packs", {}).get("output", None)
+            data_size_str = results.get("data_size_str", {}).get("output", None)
+            configs = results.get("configs", {}).get("output", None)
+            vendor_str = results.get("vendor_str", {}).get("output", None)
+            if "No such file or directory" in safe_get(data_size_str, 0):
+                results["data_size_str"]["status"] = True
+            if "does not exist" in safe_get(configs, 0, ""):
+                results["configs"]["status"] = True
+            if any(keyword in safe_get(vendor_str, -1, "")
+                   for keyword in
+                   ["couldn’t be completed", "Error writing to device", "Error reading from device", "reading"]
+                   ):
+                results["vendor_str"]["status"] = True
+            static_info = True
+            for remark, _data in results.items():
+                static_info = static_info and _data["status"]
+            configs_split = safe_get(configs, 0, "").split('/')
+            unit_number = safe_get(configs_split, 5, "").strip()
+            config = safe_get(configs_split, 4, "").strip()
+            if "No such file or directory" in safe_get(data_size_str, 0):
+                data_size = "0K"
             else:
-                return False, stderr.read().decode('utf-8').strip().splitlines()
-        return True, [""]
+                size = safe_get(data_size_str, 0, "0K").strip().split()[0]
+                data_size = "0K" if size.endswith("K") else size
+            llm_pack = "\n".join(llm_packs)
+            cg_vendor = __CG_VENDOR_MAP__.get((safe_get(vendor_str, -1, "").strip()), "NA")
+            __detail_info__[ecid]["sw_vers"] = safe_get(sw_version, 0, "").strip()
+            __detail_info__[ecid]["serial_number"] = safe_get(serial_number, 0, "").strip()
+            __detail_info__[ecid]["battery"] = safe_get(battery, 0, "").strip()
+            __detail_info__[ecid]["temperature"] = safe_get(temperature, 0, "").strip()
+            __detail_info__[ecid]["unit_number"] = unit_number
+            __detail_info__[ecid]["config"] = config
+            __detail_info__[ecid]["data_size"] = data_size
+            __detail_info__[ecid]["cg_vendor"] = cg_vendor
+            __detail_info__[ecid]["static_info"] = static_info
+            __detail_info__[ecid]["llm_pack"] = llm_pack
+            if more_info:
+                pass
+        else:
+            if int(time.time()) - self.__detail_info__.get(ecid, {}).get("check_timestamp", int(time.time())) > 10:
+                self.__detail_info__[ecid]["check_timestamp"] = int(time.time())
+                results = self.__remote_ssh_cmd__(port, __DYNAMIC_COMMAND__)
+                battery = results["battery"]["output"]
+                temperature = results["temperature"]["output"]
+                data_size_str = results["data_size_str"]["output"]
+                if "No such file or directory" in safe_get(data_size_str, 0):
+                    data_size = "0K"
+                else:
+                    size = safe_get(data_size_str, 0, "0K").strip().split()[0]
+                    data_size = "0K" if size.endswith("K") else size
+                __detail_info__[ecid]["battery"] = safe_get(battery, 0, "").strip()
+                __detail_info__[ecid]["temperature"] = safe_get(temperature, 0, "").strip()
+                __detail_info__[ecid]["data_size"] = data_size
+                if more_info:
+                    pass
+        return __detail_info__
 
     def get_detail_info(self, running_ecids: list[str], ecids=None, more_info=False) -> dict:
         ser_ecids = self.get_ecids(full=True)
         allowed_ser_ecids = {ecid: data for ecid, data in ser_ecids.items() if ecid not in running_ecids}
         self.__process_dict_lifetime__()
         self.__gen_conn__(allowed_ser_ecids)
-        for ecid, data in self.__process_dict__.items():
-            if isinstance(ecids, list) and ecid not in ecids:
-                continue
-            port = data.get("port", None)
-            if not isinstance(port, int):
-                continue
-            if (not self.__detail_info__.get(ecid, None) or
-                    not self.__detail_info__.get(ecid, None).get("static_info", False)):
-                static_info = True
-                print(f"Unit {ecid} getting static info")
-                self.__detail_info__[ecid] = {}
-                self.__detail_info__[ecid]["check_timestamp"] = int(time.time())
-                result, sw_version = self.__remote_ssh_cmd__(port, "sw_vers --buildVersion")
-                static_info = static_info and result
-                result, serial_number = self.__remote_ssh_cmd__(port, "gestalt_query SerialNumber",
-                                                                pattern=r'SerialNumber:\s*"([^"]+)"')
-                static_info = static_info and result
-                result, battery = self.__remote_ssh_cmd__(port, "smcif -kd BRSC")
-                static_info = static_info and result
-                result, temperature = self.__remote_ssh_cmd__(port, "smcif -kd TG0V")
-                static_info = static_info and result
-                result, data_size_str = self.__remote_ssh_cmd__(port, "du -h -d=1 results")
-                if "No such file or directory" not in safe_get(data_size_str, 0):
-                    static_info = static_info and result
-                result, configs = self.__remote_ssh_cmd__(port, "sysconfig read -r -k 'CFG#'")
-                if "does not exist" not in safe_get(configs, 0, ""):
-                    static_info = static_info and result
-                result, vendor_str = self.__remote_ssh_cmd__(port,
-                                                             "powerswitch lcd on ; "
-                                                             "displayPort -edp -auxFilter 0 ; "
-                                                             "displayPort -edp -wdpcd 0x4e0 2 0xb1 0x00 ; "
-                                                             "displayPort -edp -rdpcd 0x4f1 1 | cut -d ' ' -f 2"
-                                                             )
-                if any(keyword not in safe_get(vendor_str, -1, "")
-                       for keyword in ["couldn’t be completed", "Error writing to device", "Error reading from device", "reading"]
-                       ):
-                    static_info = static_info and result
-                configs_split = safe_get(configs, 0, "").split('/')
-                unit_number = safe_get(configs_split, 5, "").strip()
-                config = safe_get(configs_split, 4, "").strip()
-                if "No such file or directory" in safe_get(data_size_str, 0):
-                    data_size = "0K"
-                else:
-                    size = safe_get(data_size_str, 0, "0K").strip().split()[0]
-                    data_size = "0K" if size.endswith("K") else size
-                cg_vendor = __CG_VENDOR_MAP__.get((safe_get(vendor_str, -1, "").strip()), "NA")
-                self.__detail_info__[ecid]["sw_vers"] = safe_get(sw_version, 0, "").strip()
-                self.__detail_info__[ecid]["serial_number"] = safe_get(serial_number, 0, "").strip()
-                self.__detail_info__[ecid]["battery"] = safe_get(battery, 0, "").strip()
-                self.__detail_info__[ecid]["temperature"] = safe_get(temperature, 0, "").strip()
-                self.__detail_info__[ecid]["unit_number"] = unit_number
-                self.__detail_info__[ecid]["config"] = config
-                self.__detail_info__[ecid]["data_size"] = data_size
-                self.__detail_info__[ecid]["cg_vendor"] = cg_vendor
-                self.__detail_info__[ecid]["static_info"] = static_info
-                if more_info:
-                    pass
-            else:
-                if int(time.time()) - self.__detail_info__.get(ecid, {}).get("check_timestamp", int(time.time())) > 10:
-                    self.__detail_info__[ecid]["check_timestamp"] = int(time.time())
-                    _, battery = self.__remote_ssh_cmd__(port, "smcif -kd BRSC")
-                    _, temperature = self.__remote_ssh_cmd__(port, "smcif -kd TG0V")
-                    _, data_size_str = self.__remote_ssh_cmd__(port, "du -h -d=1 results")
-                    if "No such file or directory" in safe_get(data_size_str, 0):
-                        data_size = "0K"
-                    else:
-                        size = safe_get(data_size_str, 0, "0K").strip().split()[0]
-                        data_size = "0K" if size.endswith("K") else size
-                    self.__detail_info__[ecid]["battery"] = safe_get(battery, 0, "").strip()
-                    self.__detail_info__[ecid]["temperature"] = safe_get(temperature, 0, "").strip()
-                    self.__detail_info__[ecid]["data_size"] = data_size
-                    if more_info:
-                        pass
+        with ThreadPoolExecutor(max_workers=16) as executor:
+            features = [executor.submit(self.__fetch_info__, ecid, data, ecids, more_info)
+                        for ecid, data in self.__process_dict__.items()
+                        if ecid not in running_ecids]
+            for future in as_completed(features):
+                result = future.result()
+                if isinstance(result, dict):
+                    for ecid, data in result.items():
+                        if not self.__detail_info__.get(ecid, None):
+                            self.__detail_info__[ecid] = data
+                        else:
+                            for data_key, data_value in data.items():
+                                self.__detail_info__[ecid][data_key] = data_value
         self.__process_dict_lifetime__()
         if isinstance(ecids, list) and ecids:
             return {ecid: data for ecid, data in self.__detail_info__.items() if ecid in ecids}
@@ -435,7 +497,10 @@ class UnitServer(Detector):
                     'chmod +x unit_batterydischarge.sh ; '
                     f'screen -S batterydischarge -s /bin/zsh -d -m ./unit_batterydischarge.sh {target_power}'
                 )
-                self.__remote_ssh_cmd__(port, command, output=False)
+                self.__remote_ssh_cmd__(port, {"sw_version": {
+                    "cmd": command,
+                    "output": False
+                }})
                 success_ecids.append(ecid)
         if len(ecids) == len(success_ecids):
             return True, "Start discharging battery"
@@ -451,7 +516,10 @@ class UnitServer(Detector):
             port = self.__process_dict__.get(ecid, {}).get("port", None)
             if port:
                 command = " ; ".join(__CMD_MAP__.get(cmd, (cmd,)))
-                self.__remote_ssh_cmd__(port, command, output=False)
+                self.__remote_ssh_cmd__(port, {"sw_version": {
+                    "cmd": command,
+                    "output": False
+                }})
                 success_ecids.append(ecid)
         if len(ecids) == len(success_ecids):
             return True, f"Success send {cmd}"
@@ -472,7 +540,7 @@ class UnitServer(Detector):
         unit_temp_path = None
         if port:
             command = "mktemp -d"
-            mktmp_result, mktmp_output = self.__remote_ssh_cmd__(port, command)
+            mktmp_result, mktmp_output = self.__remote_ssh_cmd__(port, {"sw_version": {"cmd": command}})
             if not mktmp_result:
                 return False
             unit_temp_path = safe_get(mktmp_output, 0, None).strip()
@@ -497,7 +565,7 @@ class UnitServer(Detector):
             if result:
                 if unit_shasum_path and sha_value:
                     shasum_cmd = f'python3 {unit_shasum_path} {sha_option} {target_file}'
-                    sha_result, sha_output = self.__remote_ssh_cmd__(port, shasum_cmd)
+                    sha_result, sha_output = self.__remote_ssh_cmd__(port, {"sw_version": {"cmd": shasum_cmd}})
                     if not sha_result:
                         return False, 400, "Failed to run shasum"
                     sha_result = safe_get(sha_output, 0, None).strip()
@@ -515,10 +583,10 @@ class UnitServer(Detector):
                 f'ls part_* | sort -V | xargs cat > {target_path} ; '
                 f'ls {target_path}'
             )
-            output = self.__remote_ssh_cmd__(port, merge_command)
+            output = self.__remote_ssh_cmd__(port, {"sw_version": {"cmd": merge_command}})
             if unit_shasum_path and sha_value:
                 shasum_cmd = f'python3 {unit_shasum_path} {sha_option} {target_path}'
-                sha_result, sha_output = self.__remote_ssh_cmd__(port, shasum_cmd)
+                sha_result, sha_output = self.__remote_ssh_cmd__(port, {"sw_version": {"cmd": shasum_cmd}})
                 sha_result = safe_get(sha_output, 0, None).strip()
                 if sha_result != sha_value:
                     return False, "Sha result mismatch"
@@ -530,27 +598,27 @@ class UnitServer(Detector):
         return upload, merge
 
     def download_file_from_unit(self, ecid: str, file_path: str | Path) -> Generator[
-        Tuple[bool, str], Any, Tuple[bool, str]]:
+            Tuple[bool, str], Any, Tuple[bool, str]]:
         self.get_detail_info([], None)
         port = self.__process_dict__.get(ecid, {}).get("port", None)
         unit_temp_path = None
         if port:
             command = "mktemp -d"
-            mktmp_result, mktmp_output = self.__remote_ssh_cmd__(port, command)
+            mktmp_result, mktmp_output = self.__remote_ssh_cmd__(port, {"sw_version": {"cmd": command}})
             if not mktmp_result:
                 return False, "Failed to mktmp"
             unit_temp_path = safe_get(mktmp_output, 0, None).strip()
         if not port or not unit_temp_path:
             return False, "Failed to download file"
         shasum_tool = self.__base_path__.joinpath("unit_tools/shasum.py")
-        unit_shasum_path = None
+        # unit_shasum_path = None
         _unit_shasum_path = "/var/root/shasum_tool"
         rsync_result, _ = self.__rsync_core__(port, str(shasum_tool), f"root@localhost:{_unit_shasum_path}")
-        if rsync_result:
-            unit_shasum_path = _unit_shasum_path
+        # if rsync_result:
+        #     unit_shasum_path = _unit_shasum_path
         split_cmd = f"split -b 1M {file_path} {unit_temp_path}/part_"
-        self.__remote_ssh_cmd__(port, split_cmd)
-        split_result, split_files = self.__remote_ssh_cmd__(port, f"ls {unit_temp_path}/part_*")
+        self.__remote_ssh_cmd__(port, {"sw_version": {"cmd": split_cmd}})
+        split_result, split_files = self.__remote_ssh_cmd__(port, {"sw_version": {"cmd": f"ls {unit_temp_path}/part_*"}})
         if not split_result:
             return False, "Failed to split file"
         local_tmp = tempfile.mkdtemp()
