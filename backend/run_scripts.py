@@ -134,7 +134,11 @@ def log_message(base_path: Path, test_method: str, message: str):
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
-    logger.info(message)
+    try:
+        logger.info(message)
+    finally:
+        logger.removeHandler(file_handler)
+        file_handler.close()
 
     def archive_and_cleanup_old_logs():
         logs_dir = base_path.joinpath("logs")
