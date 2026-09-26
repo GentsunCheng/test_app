@@ -320,8 +320,12 @@ class Detector:
             location_id = data["loc"]
             if not self.__process_dict__.get(ecid, None):
                 self.__process_dict__[ecid] = {}
-                self.__run_cmd__(
+                process = self.__run_cmd__(
                     ["copyUnrestricted", "-w", "-u", location_id, "-s", str(self.__ssh_path__), "-t", "/var/root"])
+                process.wait()
+                process.stdout.close()
+                process.stderr.close()
+                process.kill()
                 if not self.__process_dict__.get(ecid, {}).get("tcprelay", None):
                     port = random_port()
                     self.__process_dict__[ecid]["tcprelay"] = self.__run_cmd__(
