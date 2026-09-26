@@ -208,6 +208,8 @@ class Detector:
         self.__executor__ = ThreadPoolExecutor(max_workers=16)
         self.__cleanup_lock__ = threading.Lock()
         self.__cleanup_running__ = False
+        self.__lifetime_ttl__ = 5.0
+        self.__lifetime_last_run__ = 0.0
 
     def __detector__(self) -> None:
         __remove_ecids__ = []
@@ -322,6 +324,7 @@ class Detector:
 
         def _run():
             try:
+                self.__lifetime_last_run__ = time.monotonic()
                 self.__process_dict_lifetime__()
             except Exception as e:
                 print(f"Cleanup failed: {e}")
@@ -511,7 +514,10 @@ class Detector:
                         wait_timeout: float = 2.0) -> dict:
         ser_ecids = self.get_ecids(full=True)
         allowed_ser_ecids = {ecid: data for ecid, data in ser_ecids.items() if ecid not in running_ecids}
-        self.__process_dict_lifetime__()
+        now = time.monotonic()
+        if now - self.__lifetime_last_run__ >= self.__lifetime_ttl__:
+            self.__lifetime_last_run__ = now
+            self.__process_dict_lifetime__()
         self.__gen_conn__(allowed_ser_ecids)
         futures = [
             self.__executor__.submit(self.__fetch_info__, ecid, data, ecids, more_info)
