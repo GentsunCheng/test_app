@@ -54,8 +54,17 @@ export async function fetchUnits(renderCallback) {
             state.missingNormalUnitSince.delete(id);
             if (!testingSet.has(id)) {
                 const existing = previousUnitsById.get(id);
-                newUnits.push({ id, type: 'normal', detail: existing ? existing.detail : null });
-                normalToFetchDetails.push(id);
+                const fetchedAt = existing ? (existing.detailFetchedAt || 0) : 0;
+                newUnits.push({
+                    id,
+                    type: 'normal',
+                    detail: existing ? existing.detail : null,
+                    detailFetchedAt: fetchedAt
+                });
+                // 只请求「无详情」或「详情超过 N 秒」的设备
+                if (!existing || !existing.detail || now - fetchedAt >= DETAIL_REFRESH_INTERVAL_MS) {
+                    normalToFetchDetails.push(id);
+                }
             }
         });
 
@@ -146,6 +155,7 @@ export async function fetchDetails(ecids, requestSeq = state.unitsRequestSeq) {
         if (requestSeq !== state.unitsRequestSeq) return false;
 
         let changed = false;
+        const fetchedAt = Date.now();
         state.allUnits.forEach(unit => {
             if (unit.type !== 'normal') return;
             const rawDetail = details[unit.id];
@@ -155,6 +165,7 @@ export async function fetchDetails(ecids, requestSeq = state.unitsRequestSeq) {
             const oldDetail = unit.detail;
             const cacheUpdated = updateCachedDetail(unit.id, newDetail);
             unit.detail = newDetail;
+            unit.detailFetchedAt = fetchedAt;
             if (cacheUpdated) changed = true;
             else if (!oldDetail) changed = true;
             else {
