@@ -206,6 +206,8 @@ class Detector:
         self.__process_external_data_thread__ = None
         self.__detail_lock__ = threading.Lock()
         self.__executor__ = ThreadPoolExecutor(max_workers=16)
+        self.__cleanup_lock__ = threading.Lock()
+        self.__cleanup_running__ = False
 
     def __detector__(self) -> None:
         __remove_ecids__ = []
@@ -259,7 +261,9 @@ class Detector:
 
     def stop(self) -> None:
         for ecid, data in self.__process_dict__.items():
-            data.get("tcprelay", sp.Popen(['echo'])).terminate()
+            tcprelay = data.get("tcprelay", None)
+            if isinstance(tcprelay, sp.Popen):
+                tcprelay.terminate()
         self.__processing__ = None
         self.__running__ = False
         self.__executor__.shutdown(wait=False)
@@ -300,8 +304,32 @@ class Detector:
                         ssh.close()
                     except Exception:
                         pass
+                tcprelay = data.get("tcprelay", None)
+                if isinstance(tcprelay, sp.Popen):
+                    try:
+                        tcprelay.terminate()
+                    except Exception:
+                        pass
+                    self.__wait_process__(tcprelay, timeout=3)
         for ecid in removable_info_ecids:
             self.__detail_info__.pop(ecid, None)
+
+    def __schedule_cleanup__(self) -> None:
+        with self.__cleanup_lock__:
+            if self.__cleanup_running__:
+                return
+            self.__cleanup_running__ = True
+
+        def _run():
+            try:
+                self.__process_dict_lifetime__()
+            except Exception as e:
+                print(f"Cleanup failed: {e}")
+            finally:
+                with self.__cleanup_lock__:
+                    self.__cleanup_running__ = False
+
+        threading.Thread(target=_run, daemon=True).start()
 
     @staticmethod
     def __run_cmd__(cmd: list[str]) -> sp.Popen:
@@ -314,18 +342,23 @@ class Detector:
         )
         return process
 
+    @staticmethod
+    def __wait_process__(process: sp.Popen, timeout: float | None = None) -> Tuple[str, str]:
+        try:
+            return process.communicate(timeout=timeout)
+        except sp.TimeoutExpired:
+            process.kill()
+            return process.communicate()
+
     def __gen_conn__(self, allowed_ser_ecids: dict) -> None:
         for ecid, data in allowed_ser_ecids.items():
             serialnumber = data["ser"] + '-' + ecid
             location_id = data["loc"]
             if not self.__process_dict__.get(ecid, None):
                 self.__process_dict__[ecid] = {}
-                process = self.__run_cmd__(
+                copy_process = self.__run_cmd__(
                     ["copyUnrestricted", "-w", "-u", location_id, "-s", str(self.__ssh_path__), "-t", "/var/root"])
-                process.wait()
-                process.stdout.close()
-                process.stderr.close()
-                process.kill()
+                self.__wait_process__(copy_process, timeout=30)
                 if not self.__process_dict__.get(ecid, {}).get("tcprelay", None):
                     port = random_port()
                     self.__process_dict__[ecid]["tcprelay"] = self.__run_cmd__(
@@ -489,8 +522,8 @@ class Detector:
             future.add_done_callback(self.__on_fetch_done__)
         if futures and wait_timeout is not None and wait_timeout > 0:
             wait(futures, timeout=wait_timeout)
-        # 连接清理放到后台，避免阻塞本次返回
-        threading.Thread(target=self.__process_dict_lifetime__, daemon=True).start()
+        # 连接清理放到后台，避免阻塞本次返回（同一时间只允许一个清理任务）
+        self.__schedule_cleanup__()
         with self.__detail_lock__:
             if isinstance(ecids, list) and ecids:
                 return {ecid: dict(data) for ecid, data in self.__detail_info__.items() if ecid in ecids}
@@ -515,10 +548,11 @@ class UnitServer(Detector):
         ]
         rsync_cmd.extend([source, target])
         process = self.__run_cmd__(rsync_cmd)
+        _stdout, stderr_output = self.__wait_process__(process, timeout=300)
         if process.returncode == 0:
             return True, f"Success rsync {source} to {target}"
         else:
-            return False, f"Failed to rsync {source} to {target}: {process.stderr}"
+            return False, f"Failed to rsync {source} to {target}: {stderr_output}"
 
     def discharge_battery(self, ecids: list[str], target_power: int = 5) -> Tuple[bool, str]:
         discharge_resources_file_name = "discharge_resources"
@@ -530,8 +564,9 @@ class UnitServer(Detector):
         for ecid in ecids:
             location_id = ser_ecids.get(ecid, {}).get("loc", None)
             if location_id:
-                self.__run_cmd__(
+                copy_process = self.__run_cmd__(
                     ["copyUnrestricted", "-w", "-u", location_id, "-s", str(discharge_resources), "-t", "/var/root"])
+                self.__wait_process__(copy_process, timeout=30)
                 pushed_ecids.append(ecid)
         for ecid in pushed_ecids:
             data = self.__process_dict__.get(ecid, {})

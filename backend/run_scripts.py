@@ -614,21 +614,29 @@ class TestScript:
             cwd=workdir,
         )
         self.__testing_dict__[ecid]["process"] = process
-        for line in process.stdout:
-            if record_terminal_log:
-                terminal_log_buffer.write(line.decode(encoding="utf-8"))
-                terminal_log_buffer.flush()
-            log_buffer.write(line)
-            if not self.__running__:
-                break
-        if self.__running__:
-            process.wait()
-        else:
-            process.terminate()
-        if process.returncode == 0:
-            info[ecid]["sync_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            info_queue.put(info)
-        terminal_log_buffer.close()
+        try:
+            for line in process.stdout:
+                if record_terminal_log:
+                    terminal_log_buffer.write(line.decode(encoding="utf-8"))
+                    terminal_log_buffer.flush()
+                log_buffer.write(line)
+                if not self.__running__:
+                    break
+            if self.__running__:
+                process.wait()
+            else:
+                process.terminate()
+            if process.returncode == 0:
+                info[ecid]["sync_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                info_queue.put(info)
+        finally:
+            terminal_log_buffer.close()
+            process.stdout.close()
+            try:
+                process.wait(timeout=10)
+            except sp.TimeoutExpired:
+                process.kill()
+                process.wait()
         return True
 
     def __test_lifetime_detector__(self):
