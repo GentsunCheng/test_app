@@ -397,18 +397,33 @@ class Detector:
             except paramiko.SSHException as _e:
                 print(f"SSH execute failed, port: {port}")
                 return {"status": False, "msg": "SSH execute failed"}
+        transport = ssh.get_transport()
+        pending = []
         for remark, item in command.items():
             results[remark] = {}
             cmd = item.get("cmd", None)
-            output = item.get("output", True)
-            pattern = item.get("pattern", None)
             if not cmd:
                 continue
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            std_output = stdout.read().decode('utf-8')
-            stderr_output = stderr.read().decode('utf-8')
-            exit_code = stdout.channel.recv_exit_status()
-            if output:
+            try:
+                channel = transport.open_session()
+                channel.exec_command(cmd)
+            except (paramiko.SSHException, EOFError, OSError) as _e:
+                print(f"SSH exec failed, port: {port}, cmd: {cmd}, error: {_e}")
+                continue
+            pending.append((remark, item, cmd, channel))
+        for remark, item, cmd, channel in pending:
+            need_output = item.get("output", True)
+            pattern = item.get("pattern", None)
+            try:
+                std_output = channel.makefile("rb").read().decode('utf-8')
+                stderr_output = channel.makefile_stderr("rb").read().decode('utf-8')
+                exit_code = channel.recv_exit_status()
+            except (paramiko.SSHException, EOFError, OSError) as _e:
+                print(f"SSH read failed, port: {port}, cmd: {cmd}, error: {_e}")
+                continue
+            finally:
+                channel.close()
+            if need_output:
                 if exit_code == 0:
                     results[remark]["status"] = True
                     output = re.sub(rf'{re.escape(cmd)}\r\n?', '', std_output.strip())
