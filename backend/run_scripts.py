@@ -1,3 +1,4 @@
+import codecs
 import io
 import sys
 import time
@@ -18,7 +19,6 @@ import subprocess as sp
 from art import text2art
 from pathlib import Path
 from collections import deque
-from itertools import zip_longest
 from typing import Tuple, List, Dict, Any
 from types import MappingProxyType
 
@@ -454,44 +454,69 @@ class TestScript:
         log_buffers = []
         threads = []
         buffer_positions = []
+        decoders = []
+        log_locks = []
         for ecid in ecids:
             data = self.__testing_dict__.get(ecid)
             if data:
                 log_buffers.append(data["log_stream"])
                 threads.append(data["thread"])
                 buffer_positions.append(0)
+                decoders.append(codecs.getincrementaldecoder('utf-8')(errors='replace'))
+                log_locks.append(data.get("log_lock"))
             else:
                 print(f"ECID {ecid} not found")
         if not log_buffers:
             return
-        stream_contents = []
-        while any([thread.is_alive() for thread in threads]) and self.__running__:
-            stream_contents.clear()
-            for i, buffer in enumerate(log_buffers):
-                if isinstance(buffer, io.BytesIO):
-                    if not buffer.closed:
-                        content = buffer.getvalue().decode('utf-8')
-                    else:
-                        continue
-                elif isinstance(buffer, io.StringIO):
-                    if not buffer.closed:
-                        content = buffer.getvalue()
-                    else:
-                        continue
-                else:
-                    raise ValueError(f"Unsupported buffer type: {type(buffer)}")
-                new_content = content[buffer_positions[i]:]
-                buffer_positions[i] = len(content)
-                stream_contents.append(new_content.splitlines())
-            for lines in zip_longest(*stream_contents):
-                line_str = "\n"
-                for line in lines:
-                    if line:
-                        if line.strip():
-                            line_str = line_str + line.strip() + '\n'
-                yield line_str.encode('utf-8')
-            has_content = any(any(lines) for lines in stream_contents)
-            if not has_content:
+
+        def read_new_content(index: int) -> str:
+            buffer = log_buffers[index]
+            lock = log_locks[index]
+            position = buffer_positions[index]
+            if isinstance(buffer, io.BytesIO):
+                if buffer.closed:
+                    return ""
+                try:
+                    if lock:
+                        lock.acquire()
+                    try:
+                        buffer.seek(position)
+                        new_bytes = buffer.read()
+                    finally:
+                        if lock:
+                            lock.release()
+                except ValueError:
+                    return ""
+                if not new_bytes:
+                    return ""
+                buffer_positions[index] = position + len(new_bytes)
+                return decoders[index].decode(new_bytes)
+            elif isinstance(buffer, io.StringIO):
+                if buffer.closed:
+                    return ""
+                content = buffer.getvalue()
+                new_content = content[position:]
+                buffer_positions[index] = len(content)
+                return new_content
+            else:
+                raise ValueError(f"Unsupported buffer type: {type(buffer)}")
+
+        while self.__running__:
+            any_alive = any(thread.is_alive() for thread in threads)
+            chunk_lines = []
+            for i in range(len(log_buffers)):
+                new_content = read_new_content(i)
+                if not new_content:
+                    continue
+                for line in new_content.splitlines():
+                    stripped = line.strip()
+                    if stripped:
+                        chunk_lines.append(stripped)
+            if chunk_lines:
+                yield ("\n" + "\n".join(chunk_lines) + "\n").encode('utf-8')
+            if not any_alive:
+                break
+            if not chunk_lines:
                 yield ""
             time.sleep(0.1)
         yield "################################################\n"
@@ -519,6 +544,7 @@ class TestScript:
                 "workdir": tempfile.mkdtemp(),
                 "order": order,
                 "log_stream": log_buffer,
+                "log_lock": threading.Lock(),
                 "thread": thread,
                 "process": None,
                 "test_status": {
@@ -577,14 +603,23 @@ class TestScript:
         script_name_str = text2art(script_name)
         workdir = self.__testing_dict__.get(ecid, {}).get("workdir", script_dir)
         order = self.__testing_dict__.get(ecid, {}).get("order", 0)
-        log_buffer.write(script_name_str.encode("utf-8"))
-        log_buffer.write(f"Script path: {script_dir}\n".encode("utf-8"))
-        log_buffer.write(f"Workdir: {workdir}\n".encode("utf-8"))
-        log_buffer.write(b"================")
-        log_buffer.write(b"================")
-        log_buffer.write(b"================")
-        log_buffer.write(b"================")
-        log_buffer.write(b"\n")
+        log_lock = self.__testing_dict__.get(ecid, {}).get("log_lock")
+
+        def write_log(content: bytes) -> None:
+            if log_lock:
+                with log_lock:
+                    log_buffer.write(content)
+            else:
+                log_buffer.write(content)
+
+        write_log(script_name_str.encode("utf-8"))
+        write_log(f"Script path: {script_dir}\n".encode("utf-8"))
+        write_log(f"Workdir: {workdir}\n".encode("utf-8"))
+        write_log(b"================")
+        write_log(b"================")
+        write_log(b"================")
+        write_log(b"================")
+        write_log(b"\n")
         if methods and test_method not in methods:
             return False
         test_method = test_method.replace('_', ' ')
@@ -619,7 +654,7 @@ class TestScript:
                 if record_terminal_log:
                     terminal_log_buffer.write(line.decode(encoding="utf-8"))
                     terminal_log_buffer.flush()
-                log_buffer.write(line)
+                write_log(line)
                 if not self.__running__:
                     break
             if self.__running__:

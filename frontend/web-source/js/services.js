@@ -3,6 +3,8 @@ import { showToast, stopLogs } from './utils.js';
 import { getCachedDetail, updateCachedDetail, hasMeaningfulDetail } from './detailCache.js';
 
 const NORMAL_UNIT_REMOVAL_GRACE_MS = 300;
+// 详情刷新间隔：与后端动态信息 10s 更新阈值对齐，更频繁的请求无意义
+const DETAIL_REFRESH_INTERVAL_MS = 10000;
 
 export async function checkHostAvailability(url) {
     const controller = new AbortController();
