@@ -135,7 +135,16 @@ export function renderUnits(onUnitClick) {
         let unitEl = elementMap.get(unit.id);
         const isSelected = state.selectedIds.has(unit.id);
         const isFocused = state.focusId === unit.id;
-        
+
+        // 渲染指纹：内容、状态、位置均无变化时跳过该单元的 DOM 更新
+        const detail = unit.detail || {};
+        const renderKey = [
+            index, unit.type, isSelected ? 1 : 0, isFocused ? 1 : 0,
+            detail.serial_number || '', detail.unit_number || '', detail.config || '',
+            detail.sw_vers || '', detail.battery ?? '', detail.temperature ?? '', detail.cg_vendor || ''
+        ].join('|');
+        if (unitEl && unitEl.dataset.renderKey === renderKey) return;
+
         const getBatteryHtml = (level) => {
             let batteryClass = level <= 20 ? 'battery-low' : (level <= 50 ? 'battery-mid' : 'battery-high');
             return `
@@ -346,6 +355,8 @@ export function renderUnits(onUnitClick) {
             detailMain.innerHTML = '';
             detailSub.textContent = '';
         }
+
+        unitEl.dataset.renderKey = renderKey;
 
         if (elements.unitListContainer.children[index] !== unitEl) {
             elements.unitListContainer.insertBefore(unitEl, elements.unitListContainer.children[index]);
